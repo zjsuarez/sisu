@@ -11,7 +11,12 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeManifestIcons: false, // already matched by globPatterns below
+      // offline-first: precache the whole app shell, fonts and icons included
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        cleanupOutdatedCaches: true,
+      },
       manifest: {
         name: 'Sisu',
         short_name: 'Sisu',

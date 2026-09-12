@@ -12,7 +12,14 @@ A gym tracker built as an installable web app (PWA). Add it to your phone's home
 - **Progress:** weekly volume chart, personal records, full history
 - **Profile:** name, kg/lb, weekly goal, install prompt, export JSON, reset
 
-Data is stored on the device (`localStorage`). There's no account or backend.
+## Offline
+
+Sisu is built to work at the gym with no signal. After the first visit, everything runs without a connection, including cold starts from the home-screen icon.
+
+- The service worker precaches the whole app: JS, CSS, HTML, icons, and fonts. Fonts are self-hosted with `@fontsource`, not a CDN.
+- All data lives on the device in `localStorage`, and the app asks for persistent storage so the browser doesn't evict it.
+- Nothing in the app makes network requests. Keep it that way: any new asset has to be bundled, and any future sync has to be optional.
+- Updates install in the background the next time you open the app online.
 
 ## Develop
 
