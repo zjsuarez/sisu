@@ -1,0 +1,102 @@
+import { motion } from 'motion/react'
+import { Trophy } from 'lucide-react'
+import { stats, useStore } from '../store'
+import { Block, Counter, fmtCompact, fmtDuration, Page, spring } from '../ui'
+
+export default function Progress() {
+  const { sessions, profile } = useStore()
+  const st = stats(sessions)
+  const max = Math.max(1, ...st.weeks.map((w) => w.volume))
+  const totalTime = sessions.reduce((t, s) => t + s.durationSec, 0)
+
+  return (
+    <Page subtitle="Every rep counts" title="Progress">
+      <Block className="grid grid-cols-2 gap-3">
+        <div className="card p-5">
+          <p className="text-xs text-zinc-500">Total lifted</p>
+          <p className="mt-1 font-display text-3xl font-bold">
+            <Counter value={st.totalVolume} format={fmtCompact} />
+            <span className="text-base text-zinc-500"> {profile.unit}</span>
+          </p>
+        </div>
+        <div className="card p-5">
+          <p className="text-xs text-zinc-500">Time training</p>
+          <p className="mt-1 font-display text-3xl font-bold">{Math.round(totalTime / 3600)}<span className="text-base text-zinc-500"> h</span></p>
+        </div>
+      </Block>
+
+      {/* weekly volume chart — ponytail: plain divs, add a chart lib when you need axes/tooltips */}
+      <Block className="card p-5">
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-display text-lg font-semibold">Weekly volume</h2>
+          <span className="text-xs text-zinc-500">last 8 weeks</span>
+        </div>
+        <div className="mt-6 flex h-40 items-end gap-2">
+          {st.weeks.map((w, i) => {
+            const current = i === st.weeks.length - 1
+            return (
+              <div key={w.from} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
+                {current && w.volume > 0 && <span className="text-[10px] font-semibold text-volt">{fmtCompact(w.volume)}</span>}
+                <motion.div
+                  className={`w-full rounded-lg ${current ? 'bg-volt' : 'bg-surface-2'}`}
+                  initial={{ height: 4 }}
+                  animate={{ height: `max(4px, ${(w.volume / max) * 100}%)` }}
+                  transition={{ ...spring, delay: 0.2 + i * 0.05 }}
+                />
+                <span className="text-[10px] text-zinc-500">{new Date(w.from).toLocaleDateString(undefined, { day: 'numeric', month: 'numeric' })}</span>
+              </div>
+            )
+          })}
+        </div>
+      </Block>
+
+      <Block>
+        <h2 className="mb-3 flex items-center gap-2 font-display text-xl font-semibold">
+          <Trophy size={18} className="text-volt" /> Personal records
+        </h2>
+        {st.prs.length === 0 ? (
+          <div className="card p-6 text-center text-sm text-zinc-500">Finish a workout to set your first PR.</div>
+        ) : (
+          <div className="card divide-y divide-line">
+            {st.prs.map(([name, set]) => (
+              <div key={name} className="flex items-center justify-between px-5 py-3.5">
+                <span className="text-sm">{name}</span>
+                <span className="font-display font-semibold tabular-nums">
+                  {set.weight}
+                  <span className="text-xs text-zinc-500">{profile.unit}</span> × {set.reps}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Block>
+
+      <Block>
+        <h2 className="mb-3 font-display text-xl font-semibold">History</h2>
+        <div className="space-y-2">
+          {sessions.map((s) => (
+            <details key={s.id} className="card group p-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between">
+                <div>
+                  <p className="font-semibold">{s.routine}</p>
+                  <p className="text-xs text-zinc-500">
+                    {new Date(s.date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} · {fmtDuration(s.durationSec)}
+                  </p>
+                </div>
+                <span className="text-zinc-500 transition-transform group-open:rotate-90">›</span>
+              </summary>
+              <ul className="mt-3 space-y-1 border-t border-line pt-3 text-sm">
+                {s.exercises.map((e) => (
+                  <li key={e.name} className="flex justify-between gap-4">
+                    <span className="text-zinc-300">{e.name}</span>
+                    <span className="text-right text-zinc-500 tabular-nums">{e.sets.map((x) => `${x.weight}×${x.reps}`).join('  ')}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ))}
+        </div>
+      </Block>
+    </Page>
+  )
+}
