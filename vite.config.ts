@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  // ponytail: relative base so it works on any host (gh-pages subpath included)
+  // relative base: works at any path on any host
   base: './',
   plugins: [
     react(),
@@ -15,6 +15,8 @@ export default defineConfig({
       // offline-first: precache the whole app shell, fonts and icons included
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        // Firebase's sign-in handler is proxied under /__/ (vercel.json); the SPA fallback must not swallow it
+        navigateFallbackDenylist: [/^\/__\//],
         cleanupOutdatedCaches: true,
       },
       manifest: {

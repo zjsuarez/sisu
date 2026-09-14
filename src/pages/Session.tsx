@@ -118,7 +118,7 @@ export default function Session() {
                     <NumInput label={`${e.name} set ${si + 1} weight`} value={s.weight} step={2.5} onChange={(weight) => editSet(ei, si, { weight })} />
                     <NumInput label={`${e.name} set ${si + 1} reps`} value={s.reps} step={1} onChange={(reps) => editSet(ei, si, { reps })} />
                     <Tap
-                      onClick={() => toggle(ei, si, s.done)}
+                      onClick={() => toggle(ei, si, !!s.done)}
                       aria-label={s.done ? 'Mark set not done' : 'Complete set'}
                       aria-pressed={s.done}
                       className={`grid h-11 place-items-center rounded-xl transition-colors ${s.done ? 'bg-volt text-ink' : 'bg-surface-2 text-zinc-500'}`}

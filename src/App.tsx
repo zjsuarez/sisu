@@ -8,6 +8,7 @@ import Workouts from './pages/Workouts'
 import Session from './pages/Session'
 import Progress from './pages/Progress'
 import Profile from './pages/Profile'
+import SignIn, { Splash } from './pages/SignIn'
 
 const TABS = [
   { to: '/', label: 'Today', icon: House },
@@ -18,7 +19,12 @@ const TABS = [
 
 export default function App() {
   const location = useLocation()
+  const { user } = useStore()
   const inSession = location.pathname === '/session'
+
+  // undefined = still restoring the saved sign-in from this device; that works offline, so no timeout to the sign-in screen
+  if (user === undefined) return <Splash />
+  if (!user) return <SignIn />
 
   return (
     <>

@@ -9,7 +9,7 @@ export const item: Variants = {
   show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: spring },
 }
 
-export function Page({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode }) {
+export function Page({ title, subtitle, action, children }: { title: string; subtitle?: ReactNode; action?: ReactNode; children: ReactNode }) {
   return (
     <motion.main
       initial={{ opacity: 0, y: 12 }}
@@ -20,7 +20,7 @@ export function Page({ title, subtitle, action, children }: { title: string; sub
     >
       <header className="flex items-end justify-between gap-4 pt-4 pb-6">
         <div>
-          {subtitle && <p className="text-sm text-zinc-500">{subtitle}</p>}
+          {subtitle && <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-500">{subtitle}</div>}
           <h1 className="font-display text-4xl font-bold tracking-tight">{title}</h1>
         </div>
         {action}
@@ -124,3 +124,13 @@ export const fmtDuration = (sec: number) => {
 }
 
 export const fmtCompact = (n: number) => Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(n)
+
+const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+export const fmtAgo = (t: number) => {
+  const s = Math.round((t - Date.now()) / 1000)
+  for (const [unit, sec] of [['day', 86_400], ['hour', 3_600], ['minute', 60]] as const) if (Math.abs(s) >= sec) return rtf.format(Math.round(s / sec), unit)
+  return 'just now'
+}
+
+export const fmtDay = (t: number) => new Date(t).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+export const fmtTime = (t: number) => new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })

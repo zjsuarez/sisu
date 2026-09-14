@@ -1,8 +1,9 @@
 import { motion } from 'motion/react'
 import { ChevronRight, Flame, Play, Timer, Trophy } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { startSession, stats, useStore, volume } from '../store'
-import { Block, Counter, fmtCompact, fmtDuration, Page, Ring, Tap } from '../ui'
+import { muscleLabel, startSession, stats, useStore, volume } from '../store'
+import { SyncBadge } from '../sync'
+import { Block, Counter, fmtCompact, fmtDay, fmtDuration, Page, Ring, Tap } from '../ui'
 
 const greeting = () => {
   const h = new Date().getHours()
@@ -15,8 +16,8 @@ export default function Today() {
   const st = stats(sessions)
 
   // suggest the routine done least recently
-  const lastDone = (name: string) => sessions.find((s) => s.routine === name)?.date ?? 0
-  const next = [...routines].sort((a, b) => lastDone(a.name) - lastDone(b.name))[0]
+  const lastDone = (id: string) => sessions.find((s) => s.routineId === id)?.at ?? 0
+  const next = [...routines].sort((a, b) => lastDone(a.id) - lastDone(b.id))[0]
 
   const go = () => {
     if (!active && next) startSession(next)
@@ -25,7 +26,11 @@ export default function Today() {
 
   return (
     <Page
-      subtitle={greeting()}
+      subtitle={
+        <>
+          {greeting()} <SyncBadge />
+        </>
+      }
       title={profile.name}
       action={
         <Tap onClick={() => navigate('/profile')} className="grid size-12 place-items-center rounded-full bg-gradient-to-br from-volt to-emerald-400 font-display text-lg font-bold text-ink">
@@ -46,7 +51,7 @@ export default function Today() {
           {active
             ? `${active.exercises.length} exercises · pick up where you left off`
             : next
-              ? `${next.exercises.length} exercises · ${next.tag}`
+              ? `${next.exercises.length} exercises · ${muscleLabel(next.muscles)}`
               : 'Create a routine to get started'}
         </p>
         <Tap onClick={go} className="relative mt-6 flex items-center gap-2 rounded-2xl bg-ink px-5 py-3.5 font-display font-semibold text-volt">
@@ -123,11 +128,11 @@ export default function Today() {
                 transition={{ delay: 0.35 + i * 0.05 }}
                 className="card flex items-center gap-4 p-4"
               >
-                <div className="grid size-11 place-items-center rounded-xl bg-surface-2 font-display font-bold text-volt">{s.routine.charAt(0)}</div>
+                <div className="grid size-11 place-items-center rounded-xl bg-surface-2 font-display font-bold text-volt">{s.title.charAt(0)}</div>
                 <div className="flex-1">
-                  <p className="font-semibold">{s.routine}</p>
+                  <p className="font-semibold">{s.title}</p>
                   <p className="text-xs text-zinc-500">
-                    {new Date(s.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} · {fmtDuration(s.durationSec)}
+                    {fmtDay(s.at)} · {fmtDuration(s.durationSec)}
                   </p>
                 </div>
                 <p className="font-display font-semibold">

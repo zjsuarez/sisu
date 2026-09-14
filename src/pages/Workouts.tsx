@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Check, Minus, Pencil, Play, Plus, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { deleteRoutine, LIBRARY, saveRoutine, startSession, uid, useStore, type Routine } from '../store'
+import { deleteRoutine, LIBRARY, MUSCLES, muscleLabel, newId, saveRoutine, seedRoutines, startSession, useStore, type MuscleId, type Routine } from '../store'
 import { Block, btn, Page, Sheet, spring, Tap } from '../ui'
 
-const blank = (): Routine => ({ id: uid(), name: '', tag: '', exercises: [] })
+const blank = (): Routine => ({ id: newId(), name: '', muscles: [], exercises: [] })
+const chip = (on: boolean) => `flex items-center gap-1 rounded-full border px-3.5 py-2 text-sm transition-colors ${on ? 'border-volt bg-volt/10 text-volt' : 'border-line text-zinc-400'}`
 
 export default function Workouts() {
   const { routines, active, profile } = useStore()
@@ -28,6 +29,16 @@ export default function Workouts() {
         </Tap>
       }
     >
+      {routines.length === 0 && (
+        <Block className="card p-6 text-center">
+          <p className="font-display text-xl font-semibold">No routines yet</p>
+          <p className="mt-1 text-sm text-zinc-500">Build your own with +, or start from a classic split.</p>
+          <Tap onClick={seedRoutines} className={`${btn.primary} mt-5 w-full`}>
+            Start with Push / Pull / Legs
+          </Tap>
+        </Block>
+      )}
+
       <AnimatePresence initial={false}>
         {routines.map((r) => (
           <Block key={r.id} layout exit={{ opacity: 0, scale: 0.95 }} className="card overflow-hidden">
@@ -35,7 +46,7 @@ export default function Workouts() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="font-display text-2xl font-bold">{r.name}</h2>
-                  {r.tag && <p className="text-sm text-zinc-500">{r.tag}</p>}
+                  {r.muscles.length > 0 && <p className="text-sm text-zinc-500">{muscleLabel(r.muscles)}</p>}
                 </div>
                 <Tap onClick={() => setDraft(structuredClone(r))} aria-label={`Edit ${r.name}`} className="grid size-9 place-items-center rounded-full bg-surface-2 text-zinc-400">
                   <Pencil size={15} />
@@ -80,7 +91,18 @@ function Editor({ draft, setDraft, isNew }: { draft: Routine; setDraft: (r: Rout
   return (
     <div className="space-y-4 pb-4">
       <input className={field} placeholder="Routine name" value={draft.name} onChange={(e) => set({ name: e.target.value })} autoFocus={isNew} />
-      <input className={field} placeholder="Focus (e.g. Chest · Triceps)" value={draft.tag} onChange={(e) => set({ tag: e.target.value })} />
+
+      <p className="pt-2 text-xs font-semibold tracking-widest text-zinc-500 uppercase">Muscles</p>
+      <div className="flex flex-wrap gap-2">
+        {(Object.keys(MUSCLES) as MuscleId[]).map((m) => {
+          const on = draft.muscles.includes(m)
+          return (
+            <Tap key={m} onClick={() => set({ muscles: on ? draft.muscles.filter((x) => x !== m) : [...draft.muscles, m] })} className={chip(on)}>
+              {on && <Check size={14} />} {MUSCLES[m]}
+            </Tap>
+          )
+        })}
+      </div>
 
       <AnimatePresence initial={false}>
         {draft.exercises.map((e) => (
@@ -101,7 +123,7 @@ function Editor({ draft, setDraft, isNew }: { draft: Routine; setDraft: (r: Rout
           <Tap
             key={name}
             onClick={() => toggle(name)}
-            className={`flex items-center gap-1 rounded-full border px-3.5 py-2 text-sm transition-colors ${has(name) ? 'border-volt bg-volt/10 text-volt' : 'border-line text-zinc-400'}`}
+            className={chip(has(name))}
           >
             {has(name) && <Check size={14} />} {name}
           </Tap>

@@ -1,13 +1,61 @@
 import { useSyncExternalStore } from 'react'
+import { getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut as fbSignOut, type User } from 'firebase/auth'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  waitForPendingWrites,
+  writeBatch,
+  type DocumentSnapshot,
+  type QuerySnapshot,
+} from 'firebase/firestore'
+import { auth, db } from './firebase'
 
-export type SetLog = { weight: number; reps: number; done: boolean }
+// Schema: FIREBASE_SCHEMA.md (shared with the schedule app)
+
+export const MUSCLES = {
+  chest: 'Chest', back: 'Back', shoulders: 'Shoulders', biceps: 'Biceps', triceps: 'Triceps', forearms: 'Forearms',
+  core: 'Core', quads: 'Quads', hamstrings: 'Hamstrings', glutes: 'Glutes', calves: 'Calves', cardio: 'Cardio',
+} as const
+export type MuscleId = keyof typeof MUSCLES
+export const muscleLabel = (ids: MuscleId[]) => ids.map((m) => MUSCLES[m] ?? m).join(' · ')
+
+export type SetLog = { weight: number; reps: number; done?: boolean }
 export type ExerciseLog = { name: string; sets: SetLog[] }
 export type RoutineExercise = { name: string; sets: number; reps: number; weight: number }
-export type Routine = { id: string; name: string; tag: string; exercises: RoutineExercise[] }
-export type Session = { id: string; routine: string; date: number; durationSec: number; exercises: ExerciseLog[] }
-export type Active = { routineId: string; routine: string; startedAt: number; exercises: ExerciseLog[] }
+export type Routine = { id: string; name: string; muscles: MuscleId[]; exercises: RoutineExercise[] }
+export type Session = {
+  id: string
+  date: string // 'YYYY-MM-DD' local
+  start: string // 'HH:MM' local
+  end: string
+  routineId: string | null
+  title: string
+  muscles: MuscleId[]
+  exercises: ExerciseLog[]
+  deviceId: string
+  syncedAt: number | null // server time it reached the cloud; null while waiting to upload
+  at: number // derived: local ms of date + start, for sorting and stats
+  durationSec: number // derived from start/end
+}
+export type Device = { id: string; name: string; type: 'phone' | 'desktop'; lastSyncedAt: number | null }
+export type Active = { routineId: string; routine: string; muscles: MuscleId[]; startedAt: number; exercises: ExerciseLog[] }
 export type Profile = { name: string; unit: 'kg' | 'lb'; weeklyGoal: number }
-export type State = { profile: Profile; routines: Routine[]; sessions: Session[]; active: Active | null }
+export type Sync = { waiting: number; inSync: boolean; online: boolean; error: string | null }
+export type State = {
+  user: User | null | undefined // undefined while the saved sign-in is being restored
+  authError: string | null
+  profile: Profile
+  routines: Routine[]
+  sessions: Session[]
+  devices: Device[]
+  active: Active | null // in-progress workout: device-only, never synced
+  sync: Sync
+}
 
 export const LIBRARY = [
   'Bench Press', 'Incline Dumbbell Press', 'Overhead Press', 'Lateral Raise', 'Tricep Pushdown',
@@ -18,73 +66,299 @@ export const LIBRARY = [
 
 const ex = (name: string, sets: number, reps: number, weight: number): RoutineExercise => ({ name, sets, reps, weight })
 
-const SEED: State = {
-  profile: { name: 'Athlete', unit: 'kg', weeklyGoal: 4 },
-  routines: [
-    { id: 'push', name: 'Push', tag: 'Chest · Shoulders · Triceps', exercises: [ex('Bench Press', 4, 8, 60), ex('Overhead Press', 3, 8, 40), ex('Incline Dumbbell Press', 3, 10, 22), ex('Tricep Pushdown', 3, 12, 25)] },
-    { id: 'pull', name: 'Pull', tag: 'Back · Biceps', exercises: [ex('Deadlift', 3, 5, 100), ex('Pull-up', 3, 8, 0), ex('Barbell Row', 3, 8, 60), ex('Bicep Curl', 3, 12, 12)] },
-    { id: 'legs', name: 'Legs', tag: 'Quads · Hamstrings · Glutes', exercises: [ex('Back Squat', 4, 6, 80), ex('Romanian Deadlift', 3, 10, 70), ex('Leg Press', 3, 12, 140), ex('Calf Raise', 4, 15, 40)] },
-  ],
-  sessions: [],
-  active: null,
+const SEED_ROUTINES: Omit<Routine, 'id'>[] = [
+  { name: 'Push', muscles: ['chest', 'shoulders', 'triceps'], exercises: [ex('Bench Press', 4, 8, 60), ex('Overhead Press', 3, 8, 40), ex('Incline Dumbbell Press', 3, 10, 22), ex('Tricep Pushdown', 3, 12, 25)] },
+  { name: 'Pull', muscles: ['back', 'biceps'], exercises: [ex('Deadlift', 3, 5, 100), ex('Pull-up', 3, 8, 0), ex('Barbell Row', 3, 8, 60), ex('Bicep Curl', 3, 12, 12)] },
+  { name: 'Legs', muscles: ['quads', 'hamstrings', 'glutes', 'calves'], exercises: [ex('Back Squat', 4, 6, 80), ex('Romanian Deadlift', 3, 10, 70), ex('Leg Press', 3, 12, 140), ex('Calf Raise', 4, 15, 40)] },
+]
+
+const DEFAULT_SETTINGS = { unit: 'kg' as const, weeklyGoal: 4 }
+
+export const newId = () => crypto.randomUUID()
+
+/* ---------- local dates (same convention as the schedule app: local strings, no time zone) ---------- */
+
+const pad = (n: number) => String(n).padStart(2, '0')
+export const ymd = (t: number) => {
+  const d = new Date(t)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
+const hm = (t: number) => {
+  const d = new Date(t)
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+const toMs = (date: string, time: string) => {
+  const [y, m, d] = date.split('-').map(Number)
+  const [h, min] = time.split(':').map(Number)
+  return new Date(y, m - 1, d, h, min).getTime()
+}
+const toMin = (time: string) => {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
+// end < start crosses midnight
+const durationSec = (start: string, end: string) => (((toMin(end) - toMin(start)) % 1440) + 1440) % 1440 * 60
 
-const KEY = 'sisu.v1'
+/* ---------- this device ---------- */
 
-function load(): State {
+const ACTIVE_KEY = 'sisu.active'
+const LEGACY_KEY = 'sisu.v1' // pre-Firebase localStorage state, uploaded once on first sign-in
+
+const stored = (key: string, make: () => string) => localStorage.getItem(key) ?? (localStorage.setItem(key, make()), localStorage.getItem(key)!)
+
+export const deviceId = stored('sisu.deviceId', newId)
+
+const ua = navigator.userAgent
+const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Mac/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : 'Linux'
+const browser = /Edg\//.test(ua) ? 'Edge' : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /FxiOS|Firefox\//.test(ua) ? 'Firefox' : 'Safari'
+export const installed = matchMedia('(display-mode: standalone)').matches || !!(navigator as { standalone?: boolean }).standalone
+// ponytail: mouse + large screen = desktop; a touchscreen laptop counts as a phone, add a manual override if that bites
+export const deviceType: Device['type'] = matchMedia('(pointer: fine) and (min-width: 1024px)').matches ? 'desktop' : 'phone'
+export const deviceName = () => stored('sisu.deviceName', () => (installed ? `${os} app` : `${os} · ${browser}`))
+
+/* ---------- store ---------- */
+
+function loadActive(): Active | null {
   try {
-    const raw = localStorage.getItem(KEY)
-    return raw ? { ...SEED, ...JSON.parse(raw) } : SEED
+    return JSON.parse(localStorage.getItem(ACTIVE_KEY) ?? 'null')
   } catch {
-    return SEED // corrupt storage: start fresh rather than crash
+    return null // corrupt storage: lose the in-progress workout rather than crash
   }
 }
 
-// ponytail: module-level store + useSyncExternalStore, swap for zustand if state grows past a few actions
-let state = load()
+const firstName = (user: User | null | undefined) => user?.displayName?.split(' ')[0] || 'Athlete'
+
+let state: State = {
+  user: undefined,
+  authError: null,
+  profile: { name: 'Athlete', ...DEFAULT_SETTINGS },
+  routines: [],
+  sessions: [],
+  devices: [],
+  active: loadActive(),
+  sync: { waiting: 0, inSync: false, online: navigator.onLine, error: null },
+}
+
 const subs = new Set<() => void>()
 const subscribe = (cb: () => void) => {
   subs.add(cb)
   return () => { subs.delete(cb) }
 }
+const set = (patch: Partial<State>) => {
+  state = { ...state, ...patch }
+  subs.forEach((cb) => cb())
+}
+const setSync = (patch: Partial<Sync>) => set({ sync: { ...state.sync, ...patch } })
 
 export const useStore = () => useSyncExternalStore(subscribe, () => state)
 
-export function update(fn: (s: State) => State) {
-  state = fn(state)
-  localStorage.setItem(KEY, JSON.stringify(state))
-  subs.forEach((cb) => cb())
+addEventListener('online', () => setSync({ online: true }))
+addEventListener('offline', () => setSync({ online: false }))
+
+// Writes resolve only when the server acknowledges them, so they're never awaited (that would hang offline).
+// A rejection means the server refused the write (e.g. security rules): surface it instead of losing it silently.
+const fail = (e: unknown) => {
+  console.error('[sisu] write rejected', e)
+  setSync({ error: e instanceof Error ? e.message : String(e) })
 }
 
-export const uid = () => crypto.randomUUID()
+/* ---------- Firestore paths ---------- */
+// ponytail: every path lives here; Sisu only ever writes under users/{uid}/apps/gym
 
-export const volume = (exercises: ExerciseLog[]) =>
-  exercises.reduce((t, e) => t + e.sets.reduce((s, x) => s + (x.done ? x.weight * x.reps : 0), 0), 0)
+const gymRef = (uid: string) => doc(db, 'users', uid, 'apps', 'gym')
+const col = (uid: string, name: 'routines' | 'sessions' | 'devices') => collection(db, 'users', uid, 'apps', 'gym', name)
+const me = () => state.user?.uid ?? '' // actions are only reachable after sign-in
+
+const ms = (t: unknown) => (t instanceof Timestamp ? t.toMillis() : null)
+
+/* ---------- auth + live data ---------- */
+
+export function signIn() {
+  set({ authError: null })
+  const provider = new GoogleAuthProvider()
+  const redirect = () => signInWithRedirect(auth, provider).catch((e) => set({ authError: e.message }))
+  // same as the schedule app: popups are unreliable in home-screen apps, so those always redirect
+  if (installed) return redirect()
+  signInWithPopup(auth, provider).catch((e) => (e.code === 'auth/popup-blocked' ? redirect() : e.code !== 'auth/popup-closed-by-user' && set({ authError: e.message })))
+}
+
+export function signOut() {
+  setActive(null)
+  fbSignOut(auth)
+}
+
+getRedirectResult(auth).catch((e) => set({ authError: e.message }))
+
+let unsubs: (() => void)[] = []
+
+onAuthStateChanged(auth, (user) => {
+  unsubs.forEach((u) => u())
+  unsubs = []
+  set({
+    user,
+    profile: { name: firstName(user), ...DEFAULT_SETTINGS },
+    routines: [],
+    sessions: [],
+    devices: [],
+    sync: { ...state.sync, waiting: 0, inSync: false, error: null },
+  })
+  if (user) listen(user)
+})
+
+function listen(user: User) {
+  const uid = user.uid
+  const meta = { includeMetadataChanges: true }
+  const waiting: Record<string, number> = {}
+  const cached: Record<string, boolean> = {}
+  // which listeners still hold unsent writes, and whether any is serving cached (not server-confirmed) data
+  const track = (key: string, pending: number, fromCache: boolean) => {
+    waiting[key] = pending
+    cached[key] = fromCache
+    setSync({ waiting: Object.values(waiting).reduce((a, b) => a + b, 0), inSync: !Object.values(cached).some(Boolean) })
+  }
+  const pendingDocs = (snap: QuerySnapshot) => snap.docs.filter((d) => d.metadata.hasPendingWrites).length
+
+  unsubs.push(
+    onSnapshot(gymRef(uid), meta, (snap: DocumentSnapshot) => {
+      set({ profile: { name: firstName(user), unit: snap.get('unit') ?? DEFAULT_SETTINGS.unit, weeklyGoal: snap.get('weeklyGoal') ?? DEFAULT_SETTINGS.weeklyGoal } })
+      track('gym', snap.metadata.hasPendingWrites ? 1 : 0, snap.metadata.fromCache)
+    }),
+    onSnapshot(col(uid, 'routines'), meta, (snap: QuerySnapshot) => {
+      // no query, sorted here: routines migrated from the schedule app have no createdAt and go last
+      const order = (c: unknown) => ms(c) ?? Infinity
+      set({
+        routines: snap.docs
+          .sort((a, b) => order(a.get('createdAt')) - order(b.get('createdAt')) || String(a.get('name')).localeCompare(b.get('name')))
+          .map((d) => ({ id: d.id, name: d.get('name'), muscles: d.get('muscles') ?? [], exercises: d.get('exercises') ?? [] })),
+      })
+      track('routines', pendingDocs(snap), snap.metadata.fromCache)
+    }),
+    onSnapshot(col(uid, 'sessions'), meta, (snap: QuerySnapshot) => {
+      set({
+        sessions: snap.docs
+          .map((d) => {
+            const x = d.data({ serverTimestamps: 'none' })
+            return {
+              id: d.id,
+              date: x.date,
+              start: x.start,
+              end: x.end,
+              routineId: x.routineId ?? null,
+              title: x.title,
+              muscles: x.muscles ?? [],
+              exercises: x.exercises ?? [],
+              deviceId: x.deviceId,
+              syncedAt: ms(x.syncedAt),
+              at: toMs(x.date, x.start),
+              durationSec: durationSec(x.start, x.end),
+            }
+          })
+          .sort((a, b) => b.at - a.at),
+      })
+      track('sessions', pendingDocs(snap), snap.metadata.fromCache)
+    }),
+    // not tracked: each device's own heartbeat writes would make the sync badge flicker
+    onSnapshot(col(uid, 'devices'), (snap) =>
+      set({
+        devices: snap.docs.map((d) => {
+          const x = d.data({ serverTimestamps: 'previous' })
+          return { id: d.id, name: x.name, type: x.type, lastSyncedAt: ms(x.lastSyncedAt) }
+        }),
+      }),
+    ),
+  )
+
+  uploadLegacy(uid)
+  heartbeat()
+}
+
+/**
+ * Uploads workouts logged on this device before Firebase existed. Sessions only ever add documents,
+ * so this can't clash with routines migrated from the schedule app. The batch is queued, so it works offline.
+ */
+function uploadLegacy(uid: string) {
+  type LegacySession = { id: string; routine: string; date: number; durationSec: number; exercises: ExerciseLog[] }
+  let legacy: { sessions?: LegacySession[] } | null
+  try {
+    legacy = JSON.parse(localStorage.getItem(LEGACY_KEY) ?? 'null')
+  } catch {
+    legacy = null
+  }
+  if (legacy?.sessions?.length) {
+    // ponytail: one batch (500-write cap); legacy data is a handful of test workouts
+    const batch = writeBatch(db)
+    for (const s of legacy.sessions) {
+      const start = s.date - s.durationSec * 1000
+      batch.set(doc(col(uid, 'sessions'), s.id), {
+        date: ymd(start),
+        start: hm(start),
+        end: hm(s.date),
+        routineId: null,
+        title: s.routine,
+        muscles: SEED_ROUTINES.find((r) => r.name === s.routine)?.muscles ?? [],
+        exercises: s.exercises.map((e) => ({ name: e.name, sets: e.sets.filter((x) => x.done !== false).map(({ weight, reps }) => ({ weight, reps })) })),
+        deviceId,
+        syncedAt: serverTimestamp(),
+      })
+    }
+    batch.commit().catch(fail)
+  }
+  localStorage.removeItem(LEGACY_KEY)
+}
+
+/**
+ * Records "everything from this device was in the cloud at <server time>".
+ * Waits for every queued write to be acknowledged first, so it only fires once the device is truly caught up.
+ */
+let beating = false
+let dirty = false
+async function heartbeat() {
+  dirty = true
+  if (beating) return
+  beating = true
+  try {
+    while (dirty) {
+      dirty = false
+      await waitForPendingWrites(db) // waits as long as the device is offline
+    }
+  } catch {
+    return // signed out while waiting
+  } finally {
+    beating = false
+  }
+  if (!state.user) return
+  setDoc(doc(col(me(), 'devices'), deviceId), { name: deviceName(), type: deviceType, lastSyncedAt: serverTimestamp() }, { merge: true }).catch(fail)
+}
 
 /* ---------- actions ---------- */
 
-export const startSession = (r: Routine) =>
-  update((s) => ({
-    ...s,
-    active: {
-      routineId: r.id,
-      routine: r.name,
-      startedAt: Date.now(),
-      exercises: r.exercises.map((e) => ({
-        name: e.name,
-        sets: Array.from({ length: e.sets }, () => ({ weight: e.weight, reps: e.reps, done: false })),
-      })),
-    },
-  }))
+function setActive(active: Active | null) {
+  set({ active })
+  if (active) localStorage.setItem(ACTIVE_KEY, JSON.stringify(active))
+  else localStorage.removeItem(ACTIVE_KEY)
+}
 
-const editActive = (fn: (a: Active) => Active) => update((s) => (s.active ? { ...s, active: fn(s.active) } : s))
+// the most recent logged set for an exercise, so a new workout starts where the last one ended
+const lastSet = (name: string) => state.sessions.find((s) => s.exercises.some((e) => e.name === name))?.exercises.find((e) => e.name === name)?.sets.at(-1)
+
+export const startSession = (r: Routine) =>
+  setActive({
+    routineId: r.id,
+    routine: r.name,
+    muscles: r.muscles,
+    startedAt: Date.now(),
+    exercises: r.exercises.map((e) => {
+      const last = lastSet(e.name)
+      return { name: e.name, sets: Array.from({ length: e.sets }, () => ({ weight: last?.weight ?? e.weight, reps: last?.reps ?? e.reps, done: false })) }
+    }),
+  })
+
+const editActive = (fn: (a: Active) => Active) => state.active && setActive(fn(state.active))
 
 export const editSet = (ei: number, si: number, patch: Partial<SetLog>) =>
   editActive((a) => ({
     ...a,
-    exercises: a.exercises.map((e, i) =>
-      i !== ei ? e : { ...e, sets: e.sets.map((x, j) => (j === si ? { ...x, ...patch } : x)) },
-    ),
+    exercises: a.exercises.map((e, i) => (i !== ei ? e : { ...e, sets: e.sets.map((x, j) => (j === si ? { ...x, ...patch } : x)) })),
   }))
 
 export const addSet = (ei: number) =>
@@ -92,7 +366,7 @@ export const addSet = (ei: number) =>
     ...a,
     exercises: a.exercises.map((e, i) => {
       if (i !== ei) return e
-      const last = e.sets.at(-1) ?? { weight: 0, reps: 10, done: false }
+      const last = e.sets.at(-1) ?? { weight: 0, reps: 10 }
       return { ...e, sets: [...e.sets, { ...last, done: false }] }
     }),
   }))
@@ -100,50 +374,64 @@ export const addSet = (ei: number) =>
 export const addExercise = (name: string) =>
   editActive((a) => ({ ...a, exercises: [...a.exercises, { name, sets: [{ weight: 0, reps: 10, done: false }] }] }))
 
-export const discardSession = () => update((s) => ({ ...s, active: null }))
+export const discardSession = () => setActive(null)
 
-export const finishSession = () =>
-  update((s) => {
-    if (!s.active) return s
-    const exercises = s.active.exercises
-      .map((e) => ({ ...e, sets: e.sets.filter((x) => x.done) }))
-      .filter((e) => e.sets.length)
-    if (!exercises.length) return { ...s, active: null } // nothing logged, nothing saved
-    const session: Session = {
-      id: uid(),
-      routine: s.active.routine,
-      date: Date.now(),
-      durationSec: Math.round((Date.now() - s.active.startedAt) / 1000),
-      exercises,
-    }
-    // remember the weights used so next time starts where you left off
-    const routines = s.routines.map((r) =>
-      r.id !== s.active!.routineId
-        ? r
-        : {
-            ...r,
-            exercises: r.exercises.map((re) => {
-              const done = exercises.find((e) => e.name === re.name)?.sets.at(-1)
-              return done ? { ...re, weight: done.weight, reps: done.reps } : re
-            }),
-          },
-    )
-    return { ...s, routines, active: null, sessions: [session, ...s.sessions] }
-  })
+export function finishSession() {
+  const a = state.active
+  if (!a) return
+  setActive(null)
+  const exercises = a.exercises
+    .map((e) => ({ name: e.name, sets: e.sets.filter((x) => x.done).map(({ weight, reps }) => ({ weight, reps })) }))
+    .filter((e) => e.sets.length)
+  if (!exercises.length) return // nothing logged, nothing saved
 
-export const saveRoutine = (r: Routine) =>
-  update((s) => ({
-    ...s,
-    routines: s.routines.some((x) => x.id === r.id) ? s.routines.map((x) => (x.id === r.id ? r : x)) : [...s.routines, r],
-  }))
+  // created once, fully formed, never edited afterwards
+  setDoc(doc(col(me(), 'sessions'), newId()), {
+    date: ymd(a.startedAt),
+    start: hm(a.startedAt),
+    end: hm(Date.now()),
+    routineId: a.routineId,
+    title: a.routine, // snapshot: history must not change when the routine is edited later
+    muscles: a.muscles, // snapshot, same reason
+    exercises,
+    deviceId,
+    syncedAt: serverTimestamp(),
+  }).catch(fail)
+  heartbeat()
+}
 
-export const deleteRoutine = (id: string) => update((s) => ({ ...s, routines: s.routines.filter((r) => r.id !== id) }))
+// new accounts start empty; the user opts in to starter routines (auto-seeding would race the schedule migration)
+export function seedRoutines() {
+  SEED_ROUTINES.forEach((r, i) => setDoc(doc(col(me(), 'routines'), newId()), { ...r, createdAt: Timestamp.fromMillis(Date.now() + i) }).catch(fail))
+  heartbeat()
+}
 
-export const setProfile = (patch: Partial<Profile>) => update((s) => ({ ...s, profile: { ...s.profile, ...patch } }))
+export function saveRoutine(r: Routine) {
+  const isNew = !state.routines.some((x) => x.id === r.id)
+  setDoc(doc(col(me(), 'routines'), r.id), { name: r.name, muscles: r.muscles, exercises: r.exercises, ...(isNew && { createdAt: Timestamp.now() }) }, { merge: true }).catch(fail)
+  heartbeat()
+}
 
-export const resetAll = () => update(() => SEED)
+export function deleteRoutine(id: string) {
+  deleteDoc(doc(col(me(), 'routines'), id)).catch(fail)
+  heartbeat()
+}
+
+export function setSettings(patch: Partial<Pick<Profile, 'unit' | 'weeklyGoal'>>) {
+  setDoc(gymRef(me()), patch, { merge: true }).catch(fail)
+  heartbeat()
+}
+
+export function renameDevice(name: string) {
+  localStorage.setItem('sisu.deviceName', name)
+  setDoc(doc(col(me(), 'devices'), deviceId), { name }, { merge: true }).catch(fail)
+  heartbeat()
+}
 
 /* ---------- derived stats ---------- */
+
+export const volume = (exercises: ExerciseLog[]) =>
+  exercises.reduce((t, e) => t + e.sets.reduce((s, x) => s + (x.done !== false ? x.weight * x.reps : 0), 0), 0)
 
 const DAY = 86_400_000
 const startOfDay = (t: number) => new Date(t).setHours(0, 0, 0, 0)
@@ -155,10 +443,10 @@ export const startOfWeek = (t: number) => {
 
 export function stats(sessions: Session[], now = Date.now()) {
   const week = startOfWeek(now)
-  const thisWeek = sessions.filter((x) => x.date >= week)
+  const thisWeek = sessions.filter((x) => x.at >= week)
 
   // streak = consecutive days with a session, counting back from today (or yesterday)
-  const days = new Set(sessions.map((x) => startOfDay(x.date)))
+  const days = new Set(sessions.map((x) => startOfDay(x.at)))
   let cursor = startOfDay(now)
   if (!days.has(cursor)) cursor = prevDay(cursor)
   let streak = 0
@@ -170,7 +458,7 @@ export function stats(sessions: Session[], now = Date.now()) {
   const weeks = Array.from({ length: 8 }, (_, i) => {
     const from = new Date(week).setDate(new Date(week).getDate() - 7 * (7 - i))
     const to = new Date(from).setDate(new Date(from).getDate() + 7)
-    return { from, volume: volume(sessions.filter((x) => x.date >= from && x.date < to).flatMap((x) => x.exercises)) }
+    return { from, volume: volume(sessions.filter((x) => x.at >= from && x.at < to).flatMap((x) => x.exercises)) }
   })
 
   const prs = new Map<string, SetLog>()

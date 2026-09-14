@@ -1,10 +1,11 @@
 import { motion } from 'motion/react'
 import { Trophy } from 'lucide-react'
 import { stats, useStore } from '../store'
-import { Block, Counter, fmtCompact, fmtDuration, Page, spring } from '../ui'
+import { deviceLabel } from '../sync'
+import { Block, Counter, fmtCompact, fmtDuration, fmtTime, Page, spring } from '../ui'
 
 export default function Progress() {
-  const { sessions, profile } = useStore()
+  const { sessions, profile, devices } = useStore()
   const st = stats(sessions)
   const max = Math.max(1, ...st.weeks.map((w) => w.volume))
   const totalTime = sessions.reduce((t, s) => t + s.durationSec, 0)
@@ -78,9 +79,12 @@ export default function Progress() {
             <details key={s.id} className="card group p-4">
               <summary className="flex cursor-pointer list-none items-center justify-between">
                 <div>
-                  <p className="font-semibold">{s.routine}</p>
+                  <p className="font-semibold">{s.title}</p>
                   <p className="text-xs text-zinc-500">
-                    {new Date(s.date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} · {fmtDuration(s.durationSec)}
+                    {new Date(s.at).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} · {fmtDuration(s.durationSec)}
+                  </p>
+                  <p className="text-xs text-zinc-600">
+                    {s.start} on {deviceLabel(s.deviceId, devices)} · {s.syncedAt ? `in the cloud ${fmtTime(s.syncedAt)}` : 'waiting to upload'}
                   </p>
                 </div>
                 <span className="text-zinc-500 transition-transform group-open:rotate-90">›</span>
