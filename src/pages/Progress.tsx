@@ -1,6 +1,6 @@
 import { motion } from 'motion/react'
 import { Trophy } from 'lucide-react'
-import { stats, useStore } from '../store'
+import { fromKg, stats, useStore } from '../store'
 import { deviceLabel } from '../sync'
 import { Block, Counter, fmtCompact, fmtDuration, fmtTime, Page, spring } from '../ui'
 
@@ -16,7 +16,7 @@ export default function Progress() {
         <div className="card p-5">
           <p className="text-xs text-zinc-500">Total lifted</p>
           <p className="mt-1 font-display text-3xl font-bold">
-            <Counter value={st.totalVolume} format={fmtCompact} />
+            <Counter value={fromKg(st.totalVolume, profile.unit)} format={fmtCompact} />
             <span className="text-base text-zinc-500"> {profile.unit}</span>
           </p>
         </div>
@@ -37,7 +37,7 @@ export default function Progress() {
             const current = i === st.weeks.length - 1
             return (
               <div key={w.from} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
-                {current && w.volume > 0 && <span className="text-[10px] font-semibold text-volt">{fmtCompact(w.volume)}</span>}
+                {current && w.volume > 0 && <span className="text-[10px] font-semibold text-volt">{fmtCompact(fromKg(w.volume, profile.unit))}</span>}
                 <motion.div
                   className={`w-full rounded-lg ${current ? 'bg-volt' : 'bg-surface-2'}`}
                   initial={{ height: 4 }}
@@ -63,7 +63,7 @@ export default function Progress() {
               <div key={name} className="flex items-center justify-between px-5 py-3.5">
                 <span className="text-sm">{name}</span>
                 <span className="font-display font-semibold tabular-nums">
-                  {set.weight}
+                  {fromKg(set.weight, profile.unit)}
                   <span className="text-xs text-zinc-500">{profile.unit}</span> × {set.reps}
                 </span>
               </div>
@@ -93,7 +93,7 @@ export default function Progress() {
                 {s.exercises.map((e) => (
                   <li key={e.name} className="flex justify-between gap-4">
                     <span className="text-zinc-300">{e.name}</span>
-                    <span className="text-right text-zinc-500 tabular-nums">{e.sets.map((x) => `${x.weight}×${x.reps}`).join('  ')}</span>
+                    <span className="text-right text-zinc-500 tabular-nums">{e.sets.map((x) => `${fromKg(x.weight, profile.unit)}×${x.reps}`).join('  ')}</span>
                   </li>
                 ))}
               </ul>

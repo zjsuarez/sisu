@@ -1,7 +1,7 @@
 import { motion } from 'motion/react'
-import { Check, CloudOff, CloudUpload, LoaderCircle, Monitor, Smartphone, TriangleAlert } from 'lucide-react'
-import { deviceId, useStore, type Device } from './store'
-import { fmtAgo, fmtDay, fmtTime } from './ui'
+import { Check, CloudOff, CloudUpload, LoaderCircle, Monitor, Smartphone, TriangleAlert, X } from 'lucide-react'
+import { deviceId, removeDevice, useStore, type Device } from './store'
+import { fmtAgo, fmtDay, fmtTime, Tap } from './ui'
 
 export const deviceLabel = (id: string, devices: Device[]) =>
   id === 'schedule-import' ? 'Schedule (imported)' : (devices.find((d) => d.id === id)?.name ?? 'another device')
@@ -68,6 +68,16 @@ export function Devices() {
                 {last?.syncedAt && d.id !== deviceId && ` · in the cloud ${fmtTime(last.syncedAt)}`}
               </p>
             </div>
+            {/* reinstalls and cleared browsers leave dead entries behind; workouts they logged are untouched */}
+            {d.id !== deviceId && (
+              <Tap
+                onClick={() => confirm(`Remove ${d.name} from the list? Its workouts stay.`) && removeDevice(d.id)}
+                aria-label={`Remove ${d.name}`}
+                className="grid size-8 shrink-0 place-items-center self-center rounded-full bg-surface-2 text-zinc-500"
+              >
+                <X size={14} />
+              </Tap>
+            )}
           </div>
         )
       })}

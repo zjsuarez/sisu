@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { browserLocalPersistence, browserPopupRedirectResolver, connectAuthEmulator, initializeAuth } from 'firebase/auth'
+import { browserLocalPersistence, browserPopupRedirectResolver, connectAuthEmulator, GoogleAuthProvider, initializeAuth, signInWithCredential } from 'firebase/auth'
 import { connectFirestoreEmulator, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
 
 const emulators = import.meta.env.VITE_EMULATORS === 'true'
@@ -33,4 +33,10 @@ export const db = initializeFirestore(app, {
 if (emulators) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
   connectFirestoreEmulator(db, '127.0.0.1', 8080)
+  // ponytail: test hook, emulator builds only. The auth emulator accepts an unsigned Google credential,
+  // so end-to-end tests can sign in without driving Google's real consent screen.
+  Object.assign(window, {
+    __signIn: (email = 'athlete@sisu.test', sub = 'test-athlete') =>
+      signInWithCredential(auth, GoogleAuthProvider.credential(JSON.stringify({ sub, email, email_verified: true, name: 'Test Athlete' }))),
+  })
 }

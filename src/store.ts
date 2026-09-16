@@ -4,6 +4,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   serverTimestamp,
   setDoc,
@@ -43,7 +44,18 @@ export type Session = {
   durationSec: number // derived from start/end
 }
 export type Device = { id: string; name: string; type: 'phone' | 'desktop'; lastSyncedAt: number | null }
-export type Active = { routineId: string; routine: string; muscles: MuscleId[]; startedAt: number; exercises: ExerciseLog[] }
+/** A planned workout. Co-owned: the schedule app creates and edits these too (FIREBASE_SCHEMA.md §2). */
+export type Slot = {
+  id: string
+  date: string
+  start: string
+  end: string
+  routineId: string | null
+  title: string | null
+  sessionId: string | null // set when a logged workout fulfils this slot; null = still planned
+  at: number // derived: local ms of date + start
+}
+export type Active = { routineId: string; routine: string; muscles: MuscleId[]; startedAt: number; exercises: ExerciseLog[]; slotId: string | null }
 export type Profile = { name: string; unit: 'kg' | 'lb'; weeklyGoal: number }
 export type Sync = { waiting: number; inSync: boolean; online: boolean; error: string | null }
 export type State = {
@@ -52,8 +64,11 @@ export type State = {
   profile: Profile
   routines: Routine[]
   sessions: Session[]
+  slots: Slot[]
   devices: Device[]
   active: Active | null // in-progress workout: device-only, never synced
+  /** the schedule app still holds gym data that its migration hasn't moved yet */
+  importPending: boolean
   sync: Sync
 }
 
@@ -75,6 +90,12 @@ const SEED_ROUTINES: Omit<Routine, 'id'>[] = [
 const DEFAULT_SETTINGS = { unit: 'kg' as const, weeklyGoal: 4 }
 
 export const newId = () => crypto.randomUUID()
+
+/* ---------- weight ---------- */
+// Stored in kg always, so switching the unit relabels nothing and history stays true.
+const LB_PER_KG = 2.2046226218
+export const toKg = (v: number, unit: Profile['unit']) => (unit === 'kg' ? v : v / LB_PER_KG)
+export const fromKg = (kg: number, unit: Profile['unit']) => (unit === 'kg' ? Math.round(kg * 100) / 100 : Math.round(kg * LB_PER_KG * 2) / 2)
 
 /* ---------- local dates (same convention as the schedule app: local strings, no time zone) ---------- */
 
@@ -134,8 +155,10 @@ let state: State = {
   profile: { name: 'Athlete', ...DEFAULT_SETTINGS },
   routines: [],
   sessions: [],
+  slots: [],
   devices: [],
   active: loadActive(),
+  importPending: false,
   sync: { waiting: 0, inSync: false, online: navigator.onLine, error: null },
 }
 
@@ -166,7 +189,7 @@ const fail = (e: unknown) => {
 // ponytail: every path lives here; Sisu only ever writes under users/{uid}/apps/gym
 
 const gymRef = (uid: string) => doc(db, 'users', uid, 'apps', 'gym')
-const col = (uid: string, name: 'routines' | 'sessions' | 'devices') => collection(db, 'users', uid, 'apps', 'gym', name)
+const col = (uid: string, name: 'routines' | 'sessions' | 'slots' | 'devices') => collection(db, 'users', uid, 'apps', 'gym', name)
 const me = () => state.user?.uid ?? '' // actions are only reachable after sign-in
 
 const ms = (t: unknown) => (t instanceof Timestamp ? t.toMillis() : null)
@@ -199,7 +222,9 @@ onAuthStateChanged(auth, (user) => {
     profile: { name: firstName(user), ...DEFAULT_SETTINGS },
     routines: [],
     sessions: [],
+    slots: [],
     devices: [],
+    importPending: false,
     sync: { ...state.sync, waiting: 0, inSync: false, error: null },
   })
   if (user) listen(user)
@@ -257,6 +282,17 @@ function listen(user: User) {
       })
       track('sessions', pendingDocs(snap), snap.metadata.fromCache)
     }),
+    onSnapshot(col(uid, 'slots'), meta, (snap: QuerySnapshot) => {
+      set({
+        slots: snap.docs
+          .map((d) => {
+            const x = d.data()
+            return { id: d.id, date: x.date, start: x.start, end: x.end, routineId: x.routineId ?? null, title: x.title ?? null, sessionId: x.sessionId ?? null, at: toMs(x.date, x.start) }
+          })
+          .sort((a, b) => a.at - b.at),
+      })
+      track('slots', pendingDocs(snap), snap.metadata.fromCache)
+    }),
     // not tracked: each device's own heartbeat writes would make the sync badge flicker
     onSnapshot(col(uid, 'devices'), (snap) =>
       set({
@@ -269,7 +305,23 @@ function listen(user: User) {
   )
 
   uploadLegacy(uid)
+  checkScheduleImport(uid)
   heartbeat()
+}
+
+/**
+ * Read-only peek at the schedule app's document: does it still hold gym data its migration hasn't moved?
+ * Sisu never writes there. Used to avoid offering starter routines that would sit next to the real ones.
+ */
+async function checkScheduleImport(uid: string) {
+  try {
+    const snap = await getDoc(doc(db, 'users', uid, 'apps', 'schedule'))
+    const events = (snap.get('events') ?? {}) as Record<string, { kind?: string }[]>
+    const hasGym = Object.values(events).some((day) => day?.some((e) => e.kind === 'gym'))
+    set({ importPending: !snap.get('gymMigrated') && (((snap.get('workouts') as unknown[])?.length ?? 0) > 0 || hasGym) })
+  } catch {
+    // offline or no schedule app: nothing to wait for
+  }
 }
 
 /**
@@ -341,11 +393,12 @@ function setActive(active: Active | null) {
 // the most recent logged set for an exercise, so a new workout starts where the last one ended
 const lastSet = (name: string) => state.sessions.find((s) => s.exercises.some((e) => e.name === name))?.exercises.find((e) => e.name === name)?.sets.at(-1)
 
-export const startSession = (r: Routine) =>
+export const startSession = (r: Routine, slotId: string | null = null) =>
   setActive({
     routineId: r.id,
     routine: r.name,
     muscles: r.muscles,
+    slotId,
     startedAt: Date.now(),
     exercises: r.exercises.map((e) => {
       const last = lastSet(e.name)
@@ -376,7 +429,8 @@ export const addExercise = (name: string) =>
 
 export const discardSession = () => setActive(null)
 
-export function finishSession() {
+/** @param end 'HH:MM' the workout actually finished; defaults to now (see Session.tsx for the long-workout prompt) */
+export function finishSession(end = hm(Date.now())) {
   const a = state.active
   if (!a) return
   setActive(null)
@@ -385,19 +439,44 @@ export function finishSession() {
     .filter((e) => e.sets.length)
   if (!exercises.length) return // nothing logged, nothing saved
 
+  const date = ymd(a.startedAt)
+  const id = newId()
+  const batch = writeBatch(db)
   // created once, fully formed, never edited afterwards
-  setDoc(doc(col(me(), 'sessions'), newId()), {
-    date: ymd(a.startedAt),
+  batch.set(doc(col(me(), 'sessions'), id), {
+    date,
     start: hm(a.startedAt),
-    end: hm(Date.now()),
+    end,
     routineId: a.routineId,
     title: a.routine, // snapshot: history must not change when the routine is edited later
     muscles: a.muscles, // snapshot, same reason
     exercises,
     deviceId,
     syncedAt: serverTimestamp(),
-  }).catch(fail)
+  })
+  // mark the plan this fulfils: the slot it started from, else the first unfulfilled one today
+  const slot = state.slots.find((x) => x.id === a.slotId) ?? state.slots.find((x) => x.date === date && !x.sessionId)
+  if (slot) batch.set(doc(col(me(), 'slots'), slot.id), { sessionId: id }, { merge: true })
+  batch.commit().catch(fail)
   heartbeat()
+}
+
+/**
+ * Slots are co-owned with the schedule app, so only ever write the fields being changed.
+ * A whole-doc write would erase a `sessionId` or a time the other app set a second earlier.
+ */
+export function saveSlot(id: string, patch: Partial<Omit<Slot, 'id' | 'at'>>) {
+  setDoc(doc(col(me(), 'slots'), id), patch, { merge: true }).catch(fail)
+  heartbeat()
+}
+
+export function deleteSlot(id: string) {
+  deleteDoc(doc(col(me(), 'slots'), id)).catch(fail)
+  heartbeat()
+}
+
+export function removeDevice(id: string) {
+  deleteDoc(doc(col(me(), 'devices'), id)).catch(fail)
 }
 
 // new accounts start empty; the user opts in to starter routines (auto-seeding would race the schedule migration)

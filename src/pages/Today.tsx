@@ -1,7 +1,8 @@
 import { motion } from 'motion/react'
 import { ChevronRight, Flame, Play, Timer, Trophy } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { muscleLabel, startSession, stats, useStore, volume } from '../store'
+import { fromKg, muscleLabel, startSession, stats, useStore, volume, ymd } from '../store'
+import { Plan } from '../slots'
 import { SyncBadge } from '../sync'
 import { Block, Counter, fmtCompact, fmtDay, fmtDuration, Page, Ring, Tap } from '../ui'
 
@@ -11,16 +12,18 @@ const greeting = () => {
 }
 
 export default function Today() {
-  const { profile, routines, sessions, active } = useStore()
+  const { profile, routines, sessions, slots, active } = useStore()
   const navigate = useNavigate()
   const st = stats(sessions)
 
-  // suggest the routine done least recently
+  // today's plan wins; otherwise suggest the routine trained least recently (an empty routine is no use)
+  const todaySlot = slots.find((s) => s.date === ymd(Date.now()) && !s.sessionId)
+  const planned = todaySlot?.routineId ? routines.find((r) => r.id === todaySlot.routineId) : undefined
   const lastDone = (id: string) => sessions.find((s) => s.routineId === id)?.at ?? 0
-  const next = [...routines].sort((a, b) => lastDone(a.id) - lastDone(b.id))[0]
+  const next = planned ?? routines.filter((r) => r.exercises.length).sort((a, b) => lastDone(a.id) - lastDone(b.id))[0]
 
   const go = () => {
-    if (!active && next) startSession(next)
+    if (!active && next) startSession(next, todaySlot?.id ?? null)
     navigate(active || next ? '/session' : '/workouts')
   }
 
@@ -45,7 +48,9 @@ export default function Today() {
           animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.8, 0.5] }}
           transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
         />
-        <p className="relative text-sm font-semibold tracking-widest uppercase opacity-60">{active ? 'In progress' : 'Up next'}</p>
+        <p className="relative text-sm font-semibold tracking-widest uppercase opacity-60">
+          {active ? 'In progress' : todaySlot ? `Today · ${todaySlot.start}` : 'Up next'}
+        </p>
         <h2 className="relative mt-1 font-display text-5xl font-bold tracking-tight">{active?.routine ?? next?.name ?? 'Rest day'}</h2>
         <p className="relative mt-1 font-medium opacity-70">
           {active
@@ -95,7 +100,7 @@ export default function Today() {
         {[
           { icon: Flame, label: 'Streak', value: st.streak, suffix: 'd' },
           { icon: Trophy, label: 'Workouts', value: sessions.length, suffix: '' },
-          { icon: Timer, label: `Week ${profile.unit}`, value: st.weekVolume, suffix: '' },
+          { icon: Timer, label: `Week ${profile.unit}`, value: fromKg(st.weekVolume, profile.unit), suffix: '' },
         ].map(({ icon: Icon, label, value, suffix }) => (
           <div key={label} className="card p-4">
             <Icon size={18} className="text-volt" />
@@ -106,6 +111,10 @@ export default function Today() {
             <p className="text-xs text-zinc-500">{label}</p>
           </div>
         ))}
+      </Block>
+
+      <Block>
+        <Plan />
       </Block>
 
       {/* recent */}
@@ -136,7 +145,7 @@ export default function Today() {
                   </p>
                 </div>
                 <p className="font-display font-semibold">
-                  {fmtCompact(volume(s.exercises))}
+                  {fmtCompact(fromKg(volume(s.exercises), profile.unit))}
                   <span className="text-xs text-zinc-500"> {profile.unit}</span>
                 </p>
               </motion.div>

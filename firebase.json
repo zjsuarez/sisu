@@ -1,0 +1,9 @@
+{
+  "_comment": "Local emulators only. Firestore rules and indexes are owned by the schedule-project repo (FIREBASE_SCHEMA.md §6).",
+  "emulators": {
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8080 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  }
+}

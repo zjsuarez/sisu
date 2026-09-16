@@ -1,7 +1,7 @@
 # Unified Firebase schema: Sisu + Schedule
 
-**Status: draft v2.1** (v2 plus the flag fix in §4 step 1). v1 was written by the Sisu agent (`gymapp-b5`) and reviewed by the schedule agent (`schedule-d6`). This version includes all five of that review's changes and its answers.
-**Waiting on the user:** D1 and D1b (§7). Nothing gets implemented on either side until those are approved.
+**Status: draft v3.1** — v3 plus the four fixes from `schedule-c8`'s review (migration skip condition, field-level slot writes, `title` rule, §3 wording). The user decided (§7): **both apps plan**, and a calendar slot sets day, time **and** routine. v1/v2 were written by the Sisu agent (`gymapp-b5`) and reviewed by the schedule agent (`schedule-d6`).
+**New in v3:** planned workouts become one shared collection, `apps/gym/slots`, written by both apps. Reviewed and agreed by the schedule agent. Sisu's half is implemented and tested against the emulators; nothing is deployed and no real data has been touched.
 
 Project `scheduleproject-8f615`, database `(default)`.
 
@@ -12,12 +12,13 @@ Project `scheduleproject-8f615`, database `(default)`.
 | Topic | Rule |
 |---|---|
 | Per-user root | Everything under `users/{uid}/apps/{appId}`. No document at `users/{uid}`: the name comes from the Google account. |
-| Ownership | Each fact has exactly one app that writes it. Other apps only read it. No app ever writes another app's documents. **Only exception:** the one-time Schedule → gym migration (§4) writes `apps/gym/routines` and `apps/gym/sessions` once. |
+| Ownership | Each fact lives in exactly one place. Most collections have a single writing app; others only read them. **Two exceptions:** `apps/gym/slots` is co-owned (both apps create, edit and delete slots, one document each, so writes cannot clobber each other), and the one-time Schedule to gym migration (§4) writes `apps/gym/routines`, `apps/gym/sessions` and `apps/gym/slots` once. |
 | Calendar facts | `date: 'YYYY-MM-DD'`, `start`/`end: 'HH:MM'`, local time, no time zone. `end < start` means it crosses midnight. |
 | Machine instants | Firestore `Timestamp`. Use `serverTimestamp()` when "when did the server get it" matters. |
 | IDs | `crypto.randomUUID()`. Fixed strings only for app docs (`schedule`, `budget`, `trading`, `gym`) and documented conventions (`pay:YYYY-MM-DD`). |
 | Naming | Fields camelCase, collections plural English. Existing cosmetic oddities (`pequeno`, `tx`, `cat`) stay, and new code doesn't copy them. |
 | Writes to app docs | Always `setDoc(ref, patch, { merge: true })`. Per-entry docs with one owner (e.g. a session) may be written whole. |
+| Writes to `slots` | **Field-level only** (`{ merge: true }` with just the fields being changed), never a whole-document write. The two apps touch different fields of the same slot: Sisu writes `sessionId` when a workout is done, while the calendar may be editing the time. A whole-doc write erases the other's field, and a completed workout would silently show as missed. |
 | Derived data | Not stored. Intentional snapshots are marked **snapshot** below, with the reason. |
 | Queries | None needed. Listen to whole docs/collections and sort on the client, so no composite indexes. |
 
@@ -30,8 +31,10 @@ users/{uid}/apps/gym                     { unit: 'kg'|'lb', weeklyGoal: number }
 users/{uid}/apps/gym/routines/{id}       { name, muscles: MuscleId[], exercises: RoutineExercise[], createdAt?: Timestamp }
 users/{uid}/apps/gym/sessions/{id}       { date, start, end, routineId: string|null, title, muscles: MuscleId[],
                                            exercises: LoggedExercise[], deviceId, syncedAt: Timestamp }
+users/{uid}/apps/gym/slots/{id}          { date, start, end, routineId: string|null, title: string|null,
+                                           sessionId: string|null }                   <- co-owned, both apps
 users/{uid}/apps/gym/devices/{deviceId}  { name, type: 'phone'|'desktop', lastSyncedAt: Timestamp }
-users/{uid}/apps/gym/programs/{id}       shape depends on D1 (§7)
+users/{uid}/apps/gym/programs/{id}       later: a template that generates slots (§7)
 ```
 
 ```ts
@@ -59,6 +62,15 @@ type LoggedExercise  = { name: string, sets: { weight: number, reps: number }[] 
 - **`deviceId`** is the Sisu device that logged it. Imported sessions use `'schedule-import'`.
 - **`syncedAt`** is `serverTimestamp()`, so it reads as `null` on the device until the server acknowledges the write. That's how the app shows "waiting to upload".
 
+**Slots (planned workouts)**
+- **Co-owned:** both apps create, edit and delete them. One document per slot, so two apps (or two devices) editing different slots never overwrite each other. Two edits to the *same* slot resolve last-write-wins, which is fine for one person.
+- **That shape is the whole point:** one shared list, so a workout planned in the calendar and one planned in Sisu are the same entry. Two parallel lists would drift.
+- `routineId` may be `null` (an unplanned "gym at 19:00"); `title` is the label for a slot **with no routine**, and stays `null` whenever `routineId` is set. Copying the routine name in would go stale the day the routine is renamed.
+- **`sessionId`** links the plan to the workout that fulfilled it. Sisu sets it when a workout started from that slot is finished; a workout started ad hoc attaches to the earliest unfulfilled slot the same day.
+- **Missed** = a slot in the past whose `sessionId` is still `null`. Nothing stores "missed"; it is derived.
+- Slots are not history: deleting one is normal, and it never affects logged sessions.
+- **Growth:** one document per planned workout, roughly 200 a year. Fulfilled past slots are dead weight, but deleting them on completion risks a zombie document if the other app writes the same slot moments later, and the `sessionId` link is what tells planned from ad-hoc. If it ever matters, prune fulfilled slots older than 30 days, which nothing is editing any more.
+
 **Devices**
 - **Owner:** each device writes only its own doc.
 - **`lastSyncedAt`** is the server time at which that device had no unsent writes.
@@ -70,16 +82,13 @@ type LoggedExercise  = { name: string, sets: { weight: number, reps: number }[] 
 
 - **Reads:** the Gym and General views read `apps/gym/sessions` (whole-collection listener), grouped into `{ 'YYYY-MM-DD': [...] }` by `date`.
 - **Counting rule, so nothing is counted twice:** gym hours, week/month stats, muscle stats and the General "trained" chip count **sessions only**.
-  - A gym slot (`events[kind='gym']`) is drawn as *planned* and is never counted.
-  - A slot on a day that has a session is shown as done, via the session.
+  - A slot (`apps/gym/slots`) is drawn as *planned* and is never counted.
+  - A slot whose `sessionId` is set is shown as done, via the session it points to.
 - **Muscle stats** read `sessions[].muscles` directly.
-- **`schedule.workouts`** is no longer read or written after the migration. The WorkoutLibrary UI is removed.
-- **If D1 = A and D1b = time-only:**
-  - Slots are `{ id, kind: 'gym', start, end }`. Schedule stops writing `workoutId`/`title` on new slots.
-  - Past days take their label from `sessions[].title`.
-  - Existing future slots keep their `workoutId` harmlessly, since nothing reads it.
-  - Schedule needs no routines listener.
-- `plan` events are unchanged.
+- **Planned gym moves out of `events`.** `events[kind='gym']` is retired completely. The calendar reads `apps/gym/slots` and writes there too, one document per slot, so planning still happens in the calendar exactly as today, including picking the routine.
+- **Routine picker:** Schedule listens to `apps/gym/routines` to offer the routine list when creating a slot. `schedule.workouts` and its WorkoutLibrary UI are removed after the migration; routines are edited in Sisu.
+- **Labels:** a past day takes its label from `sessions[].title`, a future day from the slot's routine name or `title`.
+- `events[kind='plan']` is unchanged.
 
 ---
 
@@ -96,8 +105,8 @@ type LoggedExercise  = { name: string, sets: { weight: number, reps: number }[] 
 **Steps:**
 0. **Backup:** the user exports Firestore before this ships.
 1. **Skip only if `apps/schedule.gymMigrated === true`.** The flag means "this account is past the cutover", not "had data". It lives in the source doc, next to `txMigrated` / `paysMigrated`.
-   - **Nothing to migrate** (no `workouts`, no gym events before today): still set `gymMigrated: true`, with one merge write, and stop.
-   - **Why:** skipping without the flag lets today's and future slots turn into sessions once they become past days. That would hit every new user and anyone whose only gym events are upcoming.
+   - **Nothing to migrate** = no `workouts` **and no gym events at any date** (past, today or future, since step 5 moves those too). In that case still set `gymMigrated: true`, with one merge write, and stop.
+   - **Why the flag either way:** without it, today's and tomorrow's gym events become past days later and would be re-read on a future sign-in. And if the condition only looked at past events, a user whose gym events are all upcoming would get the flag set while their events stayed in `events[kind='gym']` — invisible, since the calendar no longer reads that field.
 2. **Routines:** each `schedule.workouts[w]` → `apps/gym/routines/{w.id}` = `{ name: w.name, muscles: w.muscles ?? [], exercises: [] }`.
 3. **Past sessions:** each gym event `e` with `date < today`, where `workout = workouts.find(w => w.id === e.workoutId)`, → `apps/gym/sessions/{e.id}` =
    ```
@@ -112,7 +121,7 @@ type LoggedExercise  = { name: string, sets: { weight: number, reps: number }[] 
    - Remove the migrated past gym events. Rewrite each affected day with its remaining events, and `deleteField()` any day left empty.
    - Remove `workouts`.
    - Set `gymMigrated: true`.
-5. **Gym events dated today or later:** stay as slots if D1 = A. The D1 = B plan is in §7.
+5. **Gym events dated today or later** -> `apps/gym/slots/{e.id}` = `{ date, start: e.start, end: e.end, routineId: workout ? e.workoutId : null, title: workout ? null : (e.title || null), sessionId: null }`, removed from `events` in the same transaction as step 4. `title` stays `null` when a routine is set, so it can't go stale. After the migration no gym data is left in `apps/schedule`.
 
 **Idempotent:** target IDs are the existing uuids, and the flag stops re-runs.
 
@@ -141,33 +150,19 @@ type LoggedExercise  = { name: string, sets: { weight: number, reps: number }[] 
 
 ---
 
-## 7. Decisions for the user
+## 7. Decided by the user (2026-09-16)
 
-**D1: who owns planned training days?**
+**Planning happens in both apps.** The calendar sets the day, the time and the routine; Sisu can plan too. Neither app owns planning.
 
-A logged session (done) and a planned gym slot (intent) are different facts, so they can have different owners.
+**How that stays consistent:** one shared list, `apps/gym/slots`, one document per planned workout, written by both apps. The alternative both agents had proposed (each app keeping its own list) was rejected, and rightly: two lists of the same workout drift apart.
 
-- **Option A: Schedule owns *when*, Sisu owns *what*.** Both agents recommend this.
-  - You place gym slots on the calendar around your shifts, as today.
-  - Sisu shows today's slot and suggests the next routine in your rotation.
-  - Sisu programs become a rotation plus progression, not a fixed weekday split.
-  - A past slot with no session shows as missed.
-- **Option B: Sisu owns both.**
-  - A Sisu program says which days you train (e.g. Mon/Wed/Fri at 19:00).
-  - Schedule derives upcoming gym blocks from programs and stops writing gym events.
-  - Both apps need the same "program → dates" expansion.
-  - It fights a rota that changes week to week.
+**Consequences**
+- Schedule keeps its planning UI, now backed by `apps/gym/slots` instead of `events[kind='gym']`, and reads routines from `apps/gym/routines`.
+- Sisu's Today shows today's slot (routine and time). With no slot for today it falls back to suggesting the least recently trained routine.
+- **Counting is unchanged:** a slot is intent and never counts as trained. Only a logged session counts.
+- Gym logged **only** in Schedule stays an unfulfilled slot: it shows as missed and never counts as trained. Workouts count once logged in Sisu, which uses the same Google login.
 
-**D1b, only if A: do calendar slots name a routine?**
-- **Time-only (recommended):**
-  - A slot is just "gym 19:00–20:15". Sisu decides which routine, so "which routine on Thursday" has one owner.
-  - **Cost:** you can't pick "Push" for a date in the calendar anymore. That happens in Sisu.
-- **Slot keeps a routine:** you pick the routine in the calendar, and Sisu follows it. Then Sisu has no rotation of its own.
-
-**Good to know:**
-- After the migration, gym logged **only** in Schedule shows as a planned slot that never counts as trained. Workouts count once they're logged in Sisu, which uses the same Google login.
-
----
+**Programs, later:** a program is a template that *generates* slots (for example a rotation across your training days). It creates ordinary slot documents that either app can then edit, so there is still one list. Not designed yet; it comes after the core works.
 
 ## 8. Resolved in review
 
@@ -176,5 +171,5 @@ A logged session (done) and a planned gym slot (intent) are different facts, so 
 | iOS sign-in timeout | Don't copy it. Test an offline cold start on a real iPhone (§5). |
 | Muscle snapshot on sessions | Accepted. Schedule reads `sessions[].muscles`. |
 | Where the migration lives | Schedule, as one transaction, flag `gymMigrated` in `apps/schedule` (§4). |
-| `workoutId` on slots | Recommended: time-only. User decides (D1b). |
+| Routine on a slot | User decided: yes. Slots carry `routineId`, and both apps can set it (§7). |
 | Double counting | Sessions only (§3). |

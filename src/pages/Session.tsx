@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Check, Plus, Timer, X } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { addExercise, addSet, discardSession, editSet, finishSession, LIBRARY, useStore, volume } from '../store'
+import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, LIBRARY, toKg, useStore, volume } from '../store'
 import { btn, fmtCompact, fmtDuration, Sheet, spring, Tap } from '../ui'
 
 const REST_SEC = 90
+
+const nowHm = () => new Date().toTimeString().slice(0, 5)
 
 function useNow() {
   const [now, setNow] = useState(Date.now)
@@ -49,7 +51,15 @@ export default function Session() {
 
   const finish = () => {
     if (!done && !confirm('No sets completed. End without saving?')) return
-    finishSession()
+    const hours = (Date.now() - active.startedAt) / 3_600_000
+    // forgetting to tap Finish would otherwise log a 10-hour workout, and put a 10-hour block in the calendar
+    let end
+    if (hours > 3) {
+      const answer = prompt('This workout has been running for hours. What time did you actually finish? (HH:MM)', nowHm())
+      if (answer === null) return
+      end = /^\d{1,2}:\d{2}$/.test(answer) ? answer.padStart(5, '0') : undefined
+    }
+    finishSession(end)
     navigate('/')
   }
 
@@ -83,7 +93,7 @@ export default function Session() {
             {done}/{total} sets
           </span>
           <span>
-            {fmtCompact(volume(active.exercises))} {profile.unit} lifted
+            {fmtCompact(fromKg(volume(active.exercises), profile.unit))} {profile.unit} lifted
           </span>
         </div>
       </header>
@@ -115,7 +125,12 @@ export default function Session() {
                     className="grid grid-cols-[2rem_1fr_1fr_3rem] items-center gap-2 rounded-xl p-1"
                   >
                     <span className={`text-center font-display font-semibold ${s.done ? 'text-volt' : 'text-zinc-500'}`}>{si + 1}</span>
-                    <NumInput label={`${e.name} set ${si + 1} weight`} value={s.weight} step={2.5} onChange={(weight) => editSet(ei, si, { weight })} />
+                    <NumInput
+                      label={`${e.name} set ${si + 1} weight`}
+                      value={fromKg(s.weight, profile.unit)}
+                      step={profile.unit === 'kg' ? 2.5 : 5}
+                      onChange={(w) => editSet(ei, si, { weight: toKg(w, profile.unit) })}
+                    />
                     <NumInput label={`${e.name} set ${si + 1} reps`} value={s.reps} step={1} onChange={(reps) => editSet(ei, si, { reps })} />
                     <Tap
                       onClick={() => toggle(ei, si, !!s.done)}

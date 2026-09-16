@@ -2,14 +2,14 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Check, Minus, Pencil, Play, Plus, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { deleteRoutine, LIBRARY, MUSCLES, muscleLabel, newId, saveRoutine, seedRoutines, startSession, useStore, type MuscleId, type Routine } from '../store'
+import { deleteRoutine, fromKg, LIBRARY, MUSCLES, muscleLabel, newId, saveRoutine, seedRoutines, startSession, useStore, type MuscleId, type Routine } from '../store'
 import { Block, btn, Page, Sheet, spring, Tap } from '../ui'
 
 const blank = (): Routine => ({ id: newId(), name: '', muscles: [], exercises: [] })
 const chip = (on: boolean) => `flex items-center gap-1 rounded-full border px-3.5 py-2 text-sm transition-colors ${on ? 'border-volt bg-volt/10 text-volt' : 'border-line text-zinc-400'}`
 
 export default function Workouts() {
-  const { routines, active, profile } = useStore()
+  const { routines, active, profile, importPending } = useStore()
   const navigate = useNavigate()
   const [draft, setDraft] = useState<Routine | null>(null)
 
@@ -32,10 +32,17 @@ export default function Workouts() {
       {routines.length === 0 && (
         <Block className="card p-6 text-center">
           <p className="font-display text-xl font-semibold">No routines yet</p>
-          <p className="mt-1 text-sm text-zinc-500">Build your own with +, or start from a classic split.</p>
-          <Tap onClick={seedRoutines} className={`${btn.primary} mt-5 w-full`}>
-            Start with Push / Pull / Legs
-          </Tap>
+          {importPending ? (
+            // starter routines here would end up sitting next to the real ones once they arrive
+            <p className="mt-1 text-sm text-zinc-500">Your routines from Schedule haven't moved over yet. Open the schedule app once and they'll appear here.</p>
+          ) : (
+            <>
+              <p className="mt-1 text-sm text-zinc-500">Build your own with +, or start from a classic split.</p>
+              <Tap onClick={seedRoutines} className={`${btn.primary} mt-5 w-full`}>
+                Start with Push / Pull / Legs
+              </Tap>
+            </>
+          )}
         </Block>
       )}
 
@@ -58,7 +65,7 @@ export default function Workouts() {
                     <span className="text-zinc-300">{e.name}</span>
                     <span className="text-zinc-500 tabular-nums">
                       {e.sets} × {e.reps}
-                      {e.weight > 0 && ` · ${e.weight}${profile.unit}`}
+                      {e.weight > 0 && ` · ${fromKg(e.weight, profile.unit)}${profile.unit}`}
                     </span>
                   </li>
                 ))}
