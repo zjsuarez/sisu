@@ -147,7 +147,7 @@ function loadActive(): Active | null {
   }
 }
 
-const firstName = (user: User | null | undefined) => user?.displayName?.split(' ')[0] || 'Athlete'
+const firstName = (user: User | null | undefined) => user?.displayName?.split(' ')[0] || user?.email?.split('@')[0] || 'Athlete'
 
 let state: State = {
   user: undefined,
@@ -199,6 +199,8 @@ const ms = (t: unknown) => (t instanceof Timestamp ? t.toMillis() : null)
 export function signIn() {
   set({ authError: null })
   const provider = new GoogleAuthProvider()
+  // without this, the popup silently uses whatever Google account the browser is already signed into
+  provider.setCustomParameters({ prompt: 'select_account' })
   const redirect = () => signInWithRedirect(auth, provider).catch((e) => set({ authError: e.message }))
   // same as the schedule app: popups are unreliable in home-screen apps, so those always redirect
   if (installed) return redirect()

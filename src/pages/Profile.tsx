@@ -32,16 +32,22 @@ export default function Profile() {
 
   return (
     <Page subtitle="Settings" title="Profile">
-      <Block className="card flex items-center gap-4 p-5">
-        <div className="grid size-12 shrink-0 place-items-center rounded-full bg-gradient-to-br from-volt to-emerald-400 font-display text-lg font-bold text-ink">
-          {profile.name.charAt(0).toUpperCase()}
+<Block className="card p-5">
+        <div className="flex items-center gap-4">
+          <div className="grid size-12 shrink-0 place-items-center rounded-full bg-gradient-to-br from-volt to-emerald-400 font-display text-lg font-bold text-ink">
+            {profile.name.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold tracking-widest text-zinc-500 uppercase">Signed in as</p>
+            <p className="truncate font-display text-lg font-semibold">{user?.displayName ?? profile.name}</p>
+            <p className="truncate text-sm text-zinc-500">{user?.email}</p>
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-lg font-semibold">{user?.displayName ?? profile.name}</p>
-          <p className="truncate text-sm text-zinc-500">{user?.email}</p>
-        </div>
-        <Tap onClick={() => confirm('Sign out of Sisu on this device?') && signOut()} aria-label="Sign out" className="grid size-10 place-items-center rounded-full bg-surface-2 text-zinc-400">
-          <LogOut size={17} />
+        <Tap
+          onClick={() => confirm(`Sign out of ${user?.email ?? 'Sisu'} on this device?`) && signOut()}
+          className={`${btn.ghost} mt-4 flex w-full items-center justify-center gap-2 text-red-300`}
+        >
+          <LogOut size={18} /> Sign out
         </Tap>
       </Block>
 

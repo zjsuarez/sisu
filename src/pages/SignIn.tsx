@@ -39,6 +39,7 @@ export default function SignIn() {
         <Tap onClick={signIn} disabled={!sync.online} className={`${btn.primary} flex w-full items-center justify-center gap-2 disabled:opacity-40 disabled:shadow-none`}>
           <LogIn size={18} /> Continue with Google
         </Tap>
+        <p className="text-center text-xs text-zinc-600">You'll be asked which Google account to use.</p>
       </motion.div>
     </main>
   )
