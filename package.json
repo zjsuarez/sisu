@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "emulators": "firebase emulators:start --only auth,firestore --project demo-sisu",
     "dev:emulators": "vite --mode emulators",
-    "build:emulators": "vite build --mode emulators"
+    "build:emulators": "vite build --mode emulators",
+    "test:e2e": "node tests/e2e.mjs",
+    "test:backup": "node tests/backup.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
