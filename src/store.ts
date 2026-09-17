@@ -5,6 +5,8 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocFromServer,
+  getDocsFromServer,
   onSnapshot,
   serverTimestamp,
   setDoc,
@@ -475,6 +477,50 @@ export function saveSlot(id: string, patch: Partial<Omit<Slot, 'id' | 'at'>>) {
 export function deleteSlot(id: string) {
   deleteDoc(doc(col(me(), 'slots'), id)).catch(fail)
   heartbeat()
+}
+
+/**
+ * Everything this account owns, straight from the server, for a backup file.
+ * The client SDK can't discover subcollections, so the paths are listed here; they come from
+ * the schedule app's FIREBASE_REPORT.md §3. Any read failure aborts: a half backup that looks
+ * whole is worse than none.
+ */
+export async function fullBackup() {
+  const uid = me()
+  const docs: [string, string[]][] = [
+    ['apps/schedule', ['users', uid, 'apps', 'schedule']],
+    ['apps/budget', ['users', uid, 'apps', 'budget']],
+    ['apps/trading', ['users', uid, 'apps', 'trading']],
+    ['apps/gym', ['users', uid, 'apps', 'gym']],
+    ['estado/yo', ['estado', 'yo']], // legacy single-user doc, kept until it's deleted
+  ]
+  const cols: [string, string[]][] = [
+    ['apps/budget/months', ['users', uid, 'apps', 'budget', 'months']],
+    ['apps/trading/months', ['users', uid, 'apps', 'trading', 'months']],
+    ['apps/gym/routines', ['users', uid, 'apps', 'gym', 'routines']],
+    ['apps/gym/sessions', ['users', uid, 'apps', 'gym', 'sessions']],
+    ['apps/gym/slots', ['users', uid, 'apps', 'gym', 'slots']],
+    ['apps/gym/devices', ['users', uid, 'apps', 'gym', 'devices']],
+  ]
+
+  // Timestamps and other Firestore types don't survive JSON on their own
+  const plain = (v: unknown): unknown => {
+    if (v instanceof Timestamp) return { __timestamp: v.toDate().toISOString() }
+    if (Array.isArray(v)) return v.map(plain)
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, plain(x)]))
+    return v
+  }
+
+  const data: Record<string, unknown> = {}
+  for (const [name, path] of docs) {
+    const snap = await getDocFromServer(doc(db, path[0], path[1], ...path.slice(2)))
+    data[name] = snap.exists() ? plain(snap.data()) : null
+  }
+  for (const [name, path] of cols) {
+    const snap = await getDocsFromServer(collection(db, path[0], path[1], ...path.slice(2)))
+    data[name] = Object.fromEntries(snap.docs.map((d) => [d.id, plain(d.data())]))
+  }
+  return { takenAt: new Date().toISOString(), project: 'scheduleproject-8f615', uid, email: state.user?.email ?? null, data }
 }
 
 export function removeDevice(id: string) {

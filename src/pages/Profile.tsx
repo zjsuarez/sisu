@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import { Download, LogOut, Minus, Plus, Share, Smartphone } from 'lucide-react'
-import { deviceName, installed, renameDevice, setSettings, signOut, useStore } from '../store'
+import { DatabaseBackup, Download, LogOut, Minus, Plus, Share, Smartphone } from 'lucide-react'
+import { deviceName, fullBackup, installed, renameDevice, setSettings, signOut, useStore } from '../store'
 import { Devices } from '../sync'
 import { Block, btn, Page, spring, Tap } from '../ui'
 
@@ -23,11 +23,27 @@ export default function Profile() {
     return () => removeEventListener('beforeinstallprompt', onPrompt)
   }, [])
 
-  // only app data: the user object carries auth tokens and must never land in a downloaded file
-  const exportData = () => {
-    const url = URL.createObjectURL(new Blob([JSON.stringify({ settings: profile, routines, sessions }, null, 2)], { type: 'application/json' }))
-    Object.assign(document.createElement('a'), { href: url, download: `sisu-${new Date().toISOString().slice(0, 10)}.json` }).click()
+  const [saving, setSaving] = useState(false)
+
+  const download = (name: string, payload: unknown) => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }))
+    Object.assign(document.createElement('a'), { href: url, download: name }).click()
     URL.revokeObjectURL(url)
+  }
+
+  // only app data: the user object carries auth tokens and must never land in a downloaded file
+  const exportData = () => download(`sisu-${new Date().toISOString().slice(0, 10)}.json`, { settings: profile, routines, sessions })
+
+  // everything this account owns, across all the apps sharing this Firebase project
+  const backup = async () => {
+    setSaving(true)
+    try {
+      download(`firebase-backup-${new Date().toISOString().slice(0, 10)}.json`, await fullBackup())
+    } catch (e) {
+      alert(`Backup failed, nothing was saved: ${e instanceof Error ? e.message : e}\n\nThis needs a connection.`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -132,10 +148,16 @@ export default function Profile() {
         </Block>
       )}
 
-      <Block>
+      <Block className="space-y-3">
         <Tap onClick={exportData} className={`${btn.ghost} flex w-full items-center justify-center gap-2`}>
-          <Download size={18} /> Export my data
+          <Download size={18} /> Export my workouts
         </Tap>
+        <Tap onClick={backup} disabled={saving} className={`${btn.ghost} flex w-full items-center justify-center gap-2 disabled:opacity-50`}>
+          <DatabaseBackup size={18} /> {saving ? 'Reading everything…' : 'Download full backup'}
+        </Tap>
+        <p className="px-1 text-xs text-zinc-600">
+          The full backup covers every app sharing this Firebase project (schedule, money, trading and gym), read straight from the server. Keep the file somewhere safe before any migration.
+        </p>
       </Block>
 
       <Block className="pt-6 text-center">
