@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 tests/.out
+
+.vercel
+.env*
