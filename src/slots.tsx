@@ -34,7 +34,7 @@ export function Plan() {
       </div>
 
       {shown.length === 0 ? (
-        <div className="card p-5 text-center text-sm text-zinc-500">Nothing planned. Add a day here or in your schedule.</div>
+        <div className="card p-5 text-center text-sm text-muted">Nothing planned</div>
       ) : (
         <div className="space-y-2">
           <AnimatePresence initial={false}>
@@ -49,7 +49,7 @@ export function Plan() {
                   onClick={() => setDraft(toDraft(s))}
                   className="card flex w-full items-center gap-4 p-4 text-left"
                 >
-                  <div className={`grid w-14 shrink-0 place-items-center rounded-xl py-1.5 ${missed ? 'bg-surface-2 text-zinc-500' : 'bg-volt/10 text-volt'}`}>
+                  <div className={`grid w-14 shrink-0 place-items-center rounded-xl py-1.5 ${missed ? 'bg-surface-2 text-zinc-500' : 'bg-accent/10 text-accent'}`}>
                     <span className="text-[10px] font-semibold uppercase">{s.date === today ? 'Today' : fmtDay(s.at).split(' ')[0]}</span>
                     <span className="font-display text-sm font-bold">{s.start}</span>
                   </div>
@@ -77,7 +77,7 @@ export function Plan() {
 function Editor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft | null) => void }) {
   const { routines } = useStore()
   const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch })
-  const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none focus:border-volt'
+  const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none focus:border-accent'
 
   return (
     <div className="space-y-4 pb-4">
@@ -110,13 +110,13 @@ function Editor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft | null)
             <Tap
               key={r.id}
               onClick={() => set({ routineId: on ? null : r.id })}
-              className={`flex items-center gap-1 rounded-full border px-3.5 py-2 text-sm transition-colors ${on ? 'border-volt bg-volt/10 text-volt' : 'border-line text-zinc-400'}`}
+              className={`flex items-center gap-1 rounded-full border px-3.5 py-2 text-sm transition-colors ${on ? 'border-accent bg-accent/10 text-accent' : 'border-line text-zinc-400'}`}
             >
               {on && <Check size={14} />} {r.name}
             </Tap>
           )
         })}
-        {routines.length === 0 && <p className="text-sm text-zinc-500">No routines yet. A plan without one is just "gym at that time".</p>}
+        {routines.length === 0 && <p className="text-sm text-muted">No routines</p>}
       </div>
 
       <div className="sticky bottom-0 -mx-5 flex gap-3 bg-gradient-to-t from-surface via-surface to-transparent px-5 pt-6 pb-2">

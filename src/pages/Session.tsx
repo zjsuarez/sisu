@@ -87,14 +87,14 @@ export default function Session() {
           </Tap>
           <div className="text-center">
             <p className="font-display text-lg font-bold">{active.routine}</p>
-            <p className="font-mono text-sm text-volt tabular-nums">{fmtDuration(Math.round((now - active.startedAt) / 1000))}</p>
+            <p className="font-mono text-sm text-accent tabular-nums">{fmtDuration(Math.round((now - active.startedAt) / 1000))}</p>
           </div>
-          <Tap onClick={finish} className="rounded-full bg-volt px-4 py-2 font-display text-sm font-semibold text-ink">
+          <Tap onClick={finish} className="rounded-full bg-accent px-4 py-2 font-display text-sm font-semibold text-ink">
             Finish
           </Tap>
         </div>
         <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-2">
-          <motion.div className="h-full rounded-full bg-volt" animate={{ width: `${total ? (done / total) * 100 : 0}%` }} transition={spring} />
+          <motion.div className="h-full rounded-full bg-accent" animate={{ width: `${total ? (done / total) * 100 : 0}%` }} transition={spring} />
         </div>
         <div className="mt-2 flex justify-between text-xs text-zinc-500">
           <span>
@@ -133,7 +133,7 @@ export default function Session() {
                     animate={{ opacity: 1, height: 'auto', backgroundColor: s.done ? 'rgba(215,255,62,0.10)' : 'rgba(0,0,0,0)' }}
                     className="grid grid-cols-[2rem_1fr_1fr_3rem] items-center gap-2 rounded-xl p-1"
                   >
-                    <span className={`text-center font-display font-semibold ${s.done ? 'text-volt' : 'text-zinc-500'}`}>{si + 1}</span>
+                    <span className={`text-center font-display font-semibold ${s.done ? 'text-accent' : 'text-zinc-500'}`}>{si + 1}</span>
                     <NumInput
                       label={`${e.name} set ${si + 1} weight`}
                       value={fromKg(s.weight, profile.unit)}
@@ -145,7 +145,7 @@ export default function Session() {
                       onClick={() => toggle(ei, si, !!s.done)}
                       aria-label={s.done ? 'Mark set not done' : 'Complete set'}
                       aria-pressed={s.done}
-                      className={`grid h-11 place-items-center rounded-xl transition-colors ${s.done ? 'bg-volt text-ink' : 'bg-surface-2 text-zinc-500'}`}
+                      className={`grid h-11 place-items-center rounded-xl transition-colors ${s.done ? 'bg-accent text-ink' : 'bg-surface-2 text-zinc-500'}`}
                     >
                       <motion.span key={String(s.done)} initial={{ scale: 0.4, rotate: -30 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 600, damping: 18 }}>
                         <Check size={20} strokeWidth={3} />
@@ -178,7 +178,7 @@ export default function Session() {
           >
             <div className="mb-2 overflow-hidden rounded-3xl border border-line bg-surface/90 shadow-2xl shadow-black backdrop-blur-xl">
               <div className="flex items-center gap-4 p-4">
-                <Timer className="text-volt" />
+                <Timer className="text-accent" />
                 <div className="flex-1">
                   <p className="text-xs text-zinc-500">Rest</p>
                   <p className="font-display text-3xl font-bold tabular-nums">{fmtDuration(restLeft)}</p>
@@ -186,11 +186,11 @@ export default function Session() {
                 <Tap onClick={() => setRestUntil((t) => (t ?? Date.now()) + 15_000)} className="rounded-xl bg-surface-2 px-3 py-2 text-sm font-medium">
                   +15s
                 </Tap>
-                <Tap onClick={() => setRestUntil(null)} className="rounded-xl bg-volt px-3 py-2 text-sm font-semibold text-ink">
+                <Tap onClick={() => setRestUntil(null)} className="rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-ink">
                   Skip
                 </Tap>
               </div>
-              <motion.div className="h-1 bg-volt" animate={{ width: `${(restLeft / REST_SEC) * 100}%` }} transition={{ ease: 'linear', duration: 1 }} />
+              <motion.div className="h-1 bg-accent" animate={{ width: `${(restLeft / REST_SEC) * 100}%` }} transition={{ ease: 'linear', duration: 1 }} />
             </div>
           </motion.div>
         )}
@@ -203,7 +203,7 @@ export default function Session() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search"
             autoFocus
-            className="w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-volt"
+            className="w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent"
           />
           <div className="space-y-1">
             {exercises
@@ -245,7 +245,7 @@ function NumInput({ value, onChange, step, label }: { value: number; onChange: (
       placeholder="0"
       onFocus={(e) => e.target.select()}
       onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
-      className="h-11 w-full rounded-xl bg-surface-2 text-center font-display text-lg font-semibold tabular-nums outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-volt"
+      className="h-11 w-full rounded-xl bg-surface-2 text-center font-display text-lg font-semibold tabular-nums outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-accent"
     />
   )
 }

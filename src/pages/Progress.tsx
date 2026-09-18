@@ -30,16 +30,16 @@ export default function Progress() {
       <Block className="card p-5">
         <div className="flex items-baseline justify-between">
           <h2 className="font-display text-lg font-semibold">Weekly volume</h2>
-          <span className="text-xs text-zinc-500">last 8 weeks</span>
+          <span className="text-xs text-muted">8 weeks</span>
         </div>
         <div className="mt-6 flex h-40 items-end gap-2">
           {st.weeks.map((w, i) => {
             const current = i === st.weeks.length - 1
             return (
               <div key={w.from} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
-                {current && w.volume > 0 && <span className="text-[10px] font-semibold text-volt">{fmtCompact(fromKg(w.volume, profile.unit))}</span>}
+                {current && w.volume > 0 && <span className="text-[10px] font-semibold text-accent">{fmtCompact(fromKg(w.volume, profile.unit))}</span>}
                 <motion.div
-                  className={`w-full rounded-lg ${current ? 'bg-volt' : 'bg-surface-2'}`}
+                  className={`w-full rounded-lg ${current ? 'bg-accent' : 'bg-surface-2'}`}
                   initial={{ height: 4 }}
                   animate={{ height: `max(4px, ${(w.volume / max) * 100}%)` }}
                   transition={{ ...spring, delay: 0.2 + i * 0.05 }}
@@ -53,10 +53,10 @@ export default function Progress() {
 
       <Block>
         <h2 className="mb-3 flex items-center gap-2 font-display text-xl font-semibold">
-          <Trophy size={18} className="text-volt" /> Personal records
+          <Trophy size={18} className="text-accent" /> Personal records
         </h2>
         {st.prs.length === 0 ? (
-          <div className="card p-6 text-center text-sm text-zinc-500">Finish a workout to set your first PR.</div>
+          <div className="card p-6 text-center text-sm text-muted">No records yet</div>
         ) : (
           <div className="card divide-y divide-line">
             {st.prs.map(({ name, set }) => (

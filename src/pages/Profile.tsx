@@ -50,7 +50,7 @@ export default function Profile() {
     <Page subtitle="Settings" title="Profile">
 <Block className="card p-5">
         <div className="flex items-center gap-4">
-          <div className="grid size-12 shrink-0 place-items-center rounded-full bg-gradient-to-br from-volt to-emerald-400 font-display text-lg font-bold text-ink">
+          <div className="grid size-12 shrink-0 place-items-center rounded-full bg-surface-2 font-display text-lg font-semibold text-white">
             {profile.name.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
@@ -74,7 +74,7 @@ export default function Profile() {
           <div className="mt-2 flex rounded-2xl bg-surface-2 p-1">
             {(['kg', 'lb'] as const).map((u) => (
               <button key={u} onClick={() => setSettings({ unit: u })} className="relative flex-1 py-2.5 font-display font-semibold">
-                {profile.unit === u && <motion.span layoutId="unit" transition={spring} className="absolute inset-0 rounded-xl bg-volt" />}
+                {profile.unit === u && <motion.span layoutId="unit" transition={spring} className="absolute inset-0 rounded-xl bg-accent" />}
                 <span className={`relative ${profile.unit === u ? 'text-ink' : 'text-zinc-400'}`}>{u}</span>
               </button>
             ))}
@@ -84,7 +84,7 @@ export default function Profile() {
         <div className="flex items-center justify-between">
           <div>
             <p className={label}>Weekly goal</p>
-            <p className="text-sm text-zinc-400">Workouts per week</p>
+            <p className="text-sm text-muted">Per week</p>
           </div>
           <div className="flex items-center gap-3">
             <Tap aria-label="Decrease goal" onClick={() => setSettings({ weeklyGoal: Math.max(1, profile.weeklyGoal - 1) })} className="grid size-10 place-items-center rounded-full bg-surface-2">
@@ -112,7 +112,7 @@ export default function Profile() {
               const name = e.target.value.trim()
               if (name && name !== deviceName()) renameDevice(name)
             }}
-            className="mt-2 w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none focus:border-volt"
+            className="mt-2 w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none focus:border-accent"
           />
         </label>
       </Block>
@@ -120,12 +120,12 @@ export default function Profile() {
       {!installed && (
         <Block className="card p-5">
           <div className="flex items-center gap-3">
-            <div className="grid size-11 place-items-center rounded-xl bg-volt/10 text-volt">
+            <div className="grid size-11 place-items-center rounded-xl bg-accent/10 text-accent">
               <Smartphone size={20} />
             </div>
             <div>
-              <p className="font-display font-semibold">Install Sisu</p>
-              <p className="text-sm text-zinc-500">Full screen, offline, on your home screen.</p>
+              <p className="font-display font-semibold">Install</p>
+              <p className="text-sm text-muted">Full screen, offline</p>
             </div>
           </div>
           {install ? (
@@ -136,7 +136,7 @@ export default function Profile() {
             <p className="mt-4 flex flex-wrap items-center gap-1 rounded-2xl bg-surface-2 p-3 text-sm text-zinc-400">
               {ios ? (
                 <>
-                  Tap <Share size={14} className="text-volt" /> Share, then <b className="text-white">Add to Home Screen</b>.
+                  Tap <Share size={14} className="text-accent" /> Share, then <b className="text-white">Add to Home Screen</b>.
                 </>
               ) : (
                 <>
@@ -150,14 +150,12 @@ export default function Profile() {
 
       <Block className="space-y-3">
         <Tap onClick={exportData} className={`${btn.ghost} flex w-full items-center justify-center gap-2`}>
-          <Download size={18} /> Export my workouts
+          <Download size={18} /> Export workouts
         </Tap>
         <Tap onClick={backup} disabled={saving} className={`${btn.ghost} flex w-full items-center justify-center gap-2 disabled:opacity-50`}>
-          <DatabaseBackup size={18} /> {saving ? 'Reading everything…' : 'Download full backup'}
+          <DatabaseBackup size={18} /> {saving ? 'Reading…' : 'Download full backup'}
         </Tap>
-        <p className="px-1 text-xs text-zinc-600">
-          The full backup covers every app sharing this Firebase project (schedule, money, trading and gym), read straight from the server. Keep the file somewhere safe before any migration.
-        </p>
+        <p className="px-1 text-xs text-muted">Everything in this Firebase project, straight from the server.</p>
       </Block>
 
       <Block className="pt-6 text-center">

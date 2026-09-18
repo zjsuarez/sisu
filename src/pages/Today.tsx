@@ -36,30 +36,21 @@ export default function Today() {
       }
       title={profile.name}
       action={
-        <Tap onClick={() => navigate('/profile')} className="grid size-12 place-items-center rounded-full bg-gradient-to-br from-volt to-emerald-400 font-display text-lg font-bold text-ink">
+        <Tap onClick={() => navigate('/profile')} className="grid size-12 place-items-center rounded-full bg-surface-2 font-display text-lg font-semibold text-white">
           {profile.name.charAt(0).toUpperCase()}
         </Tap>
       }
     >
       {/* hero */}
-      <Block className="relative overflow-hidden rounded-[2rem] bg-volt p-6 text-ink">
-        <motion.div
-          className="absolute -top-16 -right-16 size-56 rounded-full bg-white/30 blur-2xl"
-          animate={{ scale: [1, 1.15, 1], opacity: [0.5, 0.8, 0.5] }}
-          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <p className="relative text-sm font-semibold tracking-widest uppercase opacity-60">
+      <Block className="card relative overflow-hidden p-6">
+        <p className="relative text-xs font-semibold tracking-widest text-muted uppercase">
           {active ? 'In progress' : todaySlot ? `Today · ${todaySlot.start}` : 'Up next'}
         </p>
         <h2 className="relative mt-1 font-display text-5xl font-bold tracking-tight">{active?.routine ?? next?.name ?? 'Rest day'}</h2>
-        <p className="relative mt-1 font-medium opacity-70">
-          {active
-            ? `${active.exercises.length} exercises · pick up where you left off`
-            : next
-              ? `${next.exercises.length} exercises · ${muscleLabel(next.muscles)}`
-              : 'Create a routine to get started'}
+        <p className="relative mt-1 text-sm text-muted">
+          {next || active ? `${(active ?? next).exercises.length} exercises${next && !active ? ` · ${muscleLabel(next.muscles)}` : ''}` : 'No routines'}
         </p>
-        <Tap onClick={go} className="relative mt-6 flex items-center gap-2 rounded-2xl bg-ink px-5 py-3.5 font-display font-semibold text-volt">
+        <Tap onClick={go} className="relative mt-6 flex items-center gap-2 rounded-2xl bg-accent px-5 py-3.5 font-display font-semibold text-ink">
           <Play size={18} fill="currentColor" /> {active ? 'Resume workout' : next ? 'Start workout' : 'Create routine'}
         </Tap>
       </Block>
@@ -76,9 +67,7 @@ export default function Today() {
         </Ring>
         <div className="min-w-0 flex-1">
           <p className="font-display text-lg font-semibold">Weekly goal</p>
-          <p className="text-sm text-zinc-500">
-            {st.thisWeek >= profile.weeklyGoal ? 'Crushed it. Sisu.' : `${profile.weeklyGoal - st.thisWeek} more to go this week`}
-          </p>
+          <p className="text-sm text-muted">{st.thisWeek >= profile.weeklyGoal ? 'Done' : `${profile.weeklyGoal - st.thisWeek} to go`}</p>
           <div className="mt-3 grid grid-cols-7 gap-1">
             {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
               <motion.div
@@ -86,7 +75,7 @@ export default function Today() {
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.3 + i * 0.04, type: 'spring', stiffness: 500, damping: 25 }}
-                className={`grid aspect-square place-items-center rounded-md text-[10px] font-bold ${st.weekDays[i] ? 'bg-volt text-ink' : 'bg-surface-2 text-zinc-500'}`}
+                className={`grid aspect-square place-items-center rounded-md text-[10px] font-bold ${st.weekDays[i] ? 'bg-accent text-ink' : 'bg-surface-2 text-zinc-500'}`}
               >
                 {d}
               </motion.div>
@@ -103,7 +92,7 @@ export default function Today() {
           { icon: Timer, label: `Week ${profile.unit}`, value: fromKg(st.weekVolume, profile.unit), suffix: '' },
         ].map(({ icon: Icon, label, value, suffix }) => (
           <div key={label} className="card p-4">
-            <Icon size={18} className="text-volt" />
+            <Icon size={18} className="text-accent" />
             <p className="mt-3 font-display text-2xl font-bold">
               <Counter value={value} format={value >= 10_000 ? fmtCompact : undefined} />
               {suffix}
@@ -121,12 +110,12 @@ export default function Today() {
       <Block>
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-display text-xl font-semibold">Recent</h3>
-          <Tap onClick={() => navigate('/progress')} className="flex items-center text-sm text-zinc-400">
+          <Tap onClick={() => navigate('/progress')} className="flex items-center text-sm text-muted">
             All <ChevronRight size={16} />
           </Tap>
         </div>
         {sessions.length === 0 ? (
-          <div className="card p-6 text-center text-sm text-zinc-500">No workouts yet. Your first one is the hardest.</div>
+          <div className="card p-6 text-center text-sm text-muted">No workouts</div>
         ) : (
           <div className="space-y-2">
             {sessions.slice(0, 4).map((s, i) => (
@@ -137,7 +126,7 @@ export default function Today() {
                 transition={{ delay: 0.35 + i * 0.05 }}
                 className="card flex items-center gap-4 p-4"
               >
-                <div className="grid size-11 place-items-center rounded-xl bg-surface-2 font-display font-bold text-volt">{s.title.charAt(0)}</div>
+                <div className="grid size-11 place-items-center rounded-xl bg-surface-2 font-display font-bold text-accent">{s.title.charAt(0)}</div>
                 <div className="flex-1">
                   <p className="font-semibold">{s.title}</p>
                   <p className="text-xs text-zinc-500">

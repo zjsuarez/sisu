@@ -20,7 +20,7 @@ export function Page({ title, subtitle, action, children }: { title: string; sub
     >
       <header className="flex items-end justify-between gap-4 pt-4 pb-6">
         <div>
-          {subtitle && <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-500">{subtitle}</div>}
+          {subtitle && <div className="flex flex-wrap items-center gap-2 text-sm text-muted">{subtitle}</div>}
           <h1 className="font-display text-4xl font-bold tracking-tight">{title}</h1>
         </div>
         {action}
@@ -40,8 +40,8 @@ export function Tap({ className = '', ...p }: HTMLMotionProps<'button'>) {
 }
 
 export const btn = {
-  primary: 'rounded-2xl bg-volt px-5 py-3.5 font-display font-semibold text-ink shadow-[0_0_40px_-8px] shadow-volt/50',
-  ghost: 'rounded-2xl bg-surface-2 px-5 py-3.5 font-medium text-zinc-200',
+  primary: 'rounded-2xl bg-accent px-5 py-3.5 font-display font-semibold text-ink',
+  ghost: 'rounded-2xl bg-surface-2 px-5 py-3.5 font-medium text-zinc-300',
 }
 
 export function Ring({ value, size = 120, stroke = 10, children }: { value: number; size?: number; stroke?: number; children?: ReactNode }) {
@@ -55,7 +55,7 @@ export function Ring({ value, size = 120, stroke = 10, children }: { value: numb
           cy={size / 2}
           r={r}
           fill="none"
-          stroke="var(--color-volt)"
+          stroke="var(--color-accent)"
           strokeWidth={stroke}
           strokeLinecap="round"
           initial={{ pathLength: 0 }}

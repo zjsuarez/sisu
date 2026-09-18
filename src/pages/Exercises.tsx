@@ -7,8 +7,8 @@ import { Block, btn, Page, Sheet, spring, Tap } from '../ui'
 type Draft = Omit<Exercise, 'custom'> & { isNew: boolean }
 
 const blank = (): Draft => ({ id: newId(), name: '', muscle: 'chest', secondary: [], description: null, isNew: true })
-const chip = (on: boolean) => `rounded-full border px-3.5 py-2 text-sm transition-colors ${on ? 'border-volt bg-volt/10 text-volt' : 'border-line text-zinc-400'}`
-const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-volt'
+const chip = (on: boolean) => `rounded-full border px-3.5 py-2 text-sm transition-colors ${on ? 'border-accent bg-accent/10 text-accent' : 'border-line text-zinc-400'}`
+const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent'
 
 export default function Exercises() {
   const { exercises } = useStore()
@@ -29,10 +29,10 @@ export default function Exercises() {
 
   return (
     <Page
-      subtitle={`${exercises.length} exercises · ${exercises.filter((e) => e.custom).length} custom`}
+      subtitle={`${exercises.length} · ${exercises.filter((e) => e.custom).length} custom`}
       title="Exercises"
       action={
-        <Tap onClick={() => setDraft(blank())} aria-label="New exercise" className="grid size-12 place-items-center rounded-full bg-volt text-ink">
+        <Tap onClick={() => setDraft(blank())} aria-label="New exercise" className="grid size-12 place-items-center rounded-full bg-accent text-ink">
           <Plus size={24} />
         </Tap>
       }
@@ -56,7 +56,7 @@ export default function Exercises() {
 
       <Block>
         {shown.length === 0 ? (
-          <div className="card p-6 text-center text-sm text-zinc-500">Nothing matches. Add it with +.</div>
+          <div className="card p-6 text-center text-sm text-muted">No matches</div>
         ) : (
           <div className="card divide-y divide-line">
             <AnimatePresence initial={false}>
@@ -76,7 +76,7 @@ export default function Exercises() {
                       {e.secondary.length > 0 && <span className="text-zinc-600"> · {muscleLabel(e.secondary)}</span>}
                     </p>
                   </div>
-                  {e.custom && <span className="shrink-0 rounded-full bg-volt/10 px-2.5 py-1 text-xs font-medium text-volt">yours</span>}
+                  {e.custom && <span className="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">yours</span>}
                 </motion.button>
               ))}
             </AnimatePresence>
@@ -96,7 +96,7 @@ export default function Exercises() {
                 </span>
               ))}
             </div>
-            <p className="text-sm text-zinc-400">{open.description || (open.custom ? 'No description.' : 'Built in. Add your own version with + if you want to change it.')}</p>
+            {open.description && <p className="text-sm text-zinc-400">{open.description}</p>}
             {open.custom && (
               <Tap onClick={() => edit(open)} className={`${btn.ghost} flex w-full items-center justify-center gap-2`}>
                 <Pencil size={16} /> Edit
@@ -123,7 +123,7 @@ function Editor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft | null)
     <div className="space-y-4 pb-4">
       <input className={field} placeholder="Name" value={draft.name} onChange={(e) => set({ name: e.target.value })} autoFocus={draft.isNew} />
 
-      <p className="pt-2 text-xs font-semibold tracking-widest text-zinc-500 uppercase">Main muscle</p>
+      <p className="pt-2 text-xs font-semibold tracking-widest text-muted uppercase">Muscle</p>
       <div className="flex flex-wrap gap-2">
         {MUSCLE_IDS.map((m) => (
           <Tap key={m} onClick={() => set({ muscle: m, secondary: draft.secondary.filter((x) => x !== m) })} className={chip(draft.muscle === m)}>
@@ -132,9 +132,7 @@ function Editor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft | null)
           </Tap>
         ))}
       </div>
-      <p className="px-1 text-xs text-zinc-600">This is what muscle summaries count, here and in your schedule.</p>
-
-      <p className="pt-2 text-xs font-semibold tracking-widest text-zinc-500 uppercase">Also works (optional)</p>
+      <p className="pt-2 text-xs font-semibold tracking-widest text-muted uppercase">Also works</p>
       <div className="flex flex-wrap gap-2">
         {MUSCLE_IDS.filter((m) => m !== draft.muscle).map((m) => (
           <Tap key={m} onClick={() => toggleSecondary(m)} className={chip(draft.secondary.includes(m))}>
@@ -145,7 +143,7 @@ function Editor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft | null)
 
       <textarea
         className={`${field} min-h-24 resize-none`}
-        placeholder="Description (optional): cues, setup, machine number…"
+        placeholder="Notes"
         value={draft.description ?? ''}
         onChange={(e) => set({ description: e.target.value })}
       />

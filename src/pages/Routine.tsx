@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowDown, ArrowUp, ChevronLeft, Copy, Plus, Search, Trash2, X } from 'lucide-react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { deleteRoutine, MUSCLES, newId, repLabel, saveRoutine, useStore, type RepTarget, type Routine, type RoutineExercise } from '../store'
+import { deleteRoutine, MUSCLES, newId, saveRoutine, useStore, type RepTarget, type Routine, type RoutineExercise } from '../store'
 import { btn, Sheet, spring, Tap } from '../ui'
 
-const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-volt'
-const num = 'w-14 rounded-lg bg-ink py-1.5 text-center font-display font-semibold tabular-nums outline-none focus:ring-2 focus:ring-volt'
+const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent'
+const num = 'w-14 rounded-lg bg-ink py-1.5 text-center font-display font-semibold tabular-nums outline-none focus:ring-2 focus:ring-accent'
 
 const move = <T,>(list: T[], from: number, to: number) => {
   if (to < 0 || to >= list.length) return list
@@ -66,16 +66,16 @@ export default function RoutineEditor() {
       </header>
 
       <div className="space-y-4">
-        <input className={field} placeholder="Routine name (Push, Upper…)" value={draft.name} onChange={(e) => set({ name: e.target.value })} autoFocus={!existing} />
+        <input className={field} placeholder="Name" value={draft.name} onChange={(e) => set({ name: e.target.value })} autoFocus={!existing} />
 
         <div>
-          <p className="mb-2 text-xs font-semibold tracking-widest text-zinc-500 uppercase">Belongs to</p>
+          <p className="mb-2 text-xs font-semibold tracking-widest text-muted uppercase">Plan</p>
           <div className="flex flex-wrap gap-2">
             {[{ id: null, name: 'No plan' }, ...plans].map((p) => (
               <Tap
                 key={p.id ?? 'none'}
                 onClick={() => set({ planId: p.id })}
-                className={`rounded-full border px-3.5 py-2 text-sm ${draft.planId === p.id ? 'border-volt bg-volt/10 text-volt' : 'border-line text-zinc-400'}`}
+                className={`rounded-full border px-3.5 py-2 text-sm ${draft.planId === p.id ? 'border-accent bg-accent/10 text-accent' : 'border-line text-zinc-400'}`}
               >
                 {p.name}
               </Tap>
@@ -162,9 +162,8 @@ export default function RoutineEditor() {
         </Tap>
 
         {draft.exercises.length > 0 && (
-          <p className="px-1 text-xs text-zinc-600">
-            {draft.exercises.length} exercises · {draft.exercises.reduce((n, e) => n + e.sets.length, 0)} sets · targets like {repLabel(draft.exercises[0].sets[0])} reps. Weights come from
-            what you lifted last time.
+          <p className="px-1 text-xs text-muted">
+            {draft.exercises.length} exercises · {draft.exercises.reduce((n, e) => n + e.sets.length, 0)} sets
           </p>
         )}
       </div>
@@ -215,7 +214,7 @@ export default function RoutineEditor() {
                 <Plus size={16} className="text-zinc-500" />
               </Tap>
             ))}
-            {options.length === 0 && <p className="p-4 text-center text-sm text-zinc-500">Nothing matches. Add it in the exercise library first.</p>}
+            {options.length === 0 && <p className="p-4 text-center text-sm text-muted">No matches</p>}
           </div>
         </div>
       </Sheet>

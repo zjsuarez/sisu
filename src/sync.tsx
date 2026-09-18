@@ -13,14 +13,14 @@ export function SyncBadge() {
   const where = sync.online ? 'Connecting' : 'Offline'
 
   const s = sync.error
-    ? { icon: TriangleAlert, text: "Couldn't sync", tone: 'text-red-400' }
+    ? { icon: TriangleAlert, text: "Couldn't sync", tone: 'text-white' }
     : sync.waiting && !sync.inSync
-      ? { icon: CloudOff, text: `${where} · ${sync.waiting} waiting to upload`, tone: 'text-amber-300' }
+      ? { icon: CloudOff, text: `${where} · ${sync.waiting} waiting`, tone: 'text-zinc-300' }
       : sync.waiting
-        ? { icon: CloudUpload, text: `Uploading ${sync.waiting}…`, tone: 'text-volt' }
+        ? { icon: CloudUpload, text: `Uploading ${sync.waiting}…`, tone: 'text-white' }
         : !sync.inSync
-          ? { icon: sync.online ? LoaderCircle : CloudOff, text: synced ? `${where} · synced ${fmtAgo(synced)}` : `${where} · saved on device`, tone: 'text-zinc-400' }
-          : { icon: Check, text: 'Synced', tone: 'text-emerald-400' }
+          ? { icon: sync.online ? LoaderCircle : CloudOff, text: synced ? `${where} · synced ${fmtAgo(synced)}` : where, tone: 'text-muted' }
+          : { icon: Check, text: 'Synced', tone: 'text-muted' }
 
   return (
     <motion.span
@@ -42,7 +42,7 @@ export function Devices() {
   const { devices, sessions } = useStore()
   const list = [...devices].sort((a, b) => Number(b.id === deviceId) - Number(a.id === deviceId) || (b.lastSyncedAt ?? 0) - (a.lastSyncedAt ?? 0))
 
-  if (!list.length) return <p className="card p-5 text-sm text-zinc-500">No devices yet. This one appears after its first sync.</p>
+  if (!list.length) return <p className="card p-5 text-sm text-muted">No devices</p>
 
   return (
     <div className="card divide-y divide-line">
@@ -51,7 +51,7 @@ export function Devices() {
         const last = sessions.find((s) => s.deviceId === d.id)
         return (
           <div key={d.id} className="flex gap-4 px-5 py-4">
-            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-volt">
+            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-zinc-300">
               <Icon size={18} />
             </div>
             <div className="min-w-0 flex-1 space-y-0.5">
@@ -60,10 +60,10 @@ export function Devices() {
                 {d.id === deviceId && <span className="ml-2 text-xs font-medium text-zinc-500">this device</span>}
               </p>
               <p className="text-xs text-zinc-400">
-                {d.id === deviceId ? <SyncBadge /> : d.lastSyncedAt ? `Up to date as of ${fmtAgo(d.lastSyncedAt)}` : 'Never finished a sync'}
+                {d.id === deviceId ? <SyncBadge /> : d.lastSyncedAt ? `Synced ${fmtAgo(d.lastSyncedAt)}` : 'Never synced'}
               </p>
               <p className="text-xs text-zinc-500">
-                {last ? `Last workout: ${last.title} · ${fmtDay(last.at)} ${last.start}` : 'No workouts logged here'}
+                {last ? `${last.title} · ${fmtDay(last.at)} ${last.start}` : 'No workouts'}
                 {last && !last.syncedAt && ' · waiting to upload'}
                 {last?.syncedAt && d.id !== deviceId && ` · in the cloud ${fmtTime(last.syncedAt)}`}
               </p>
