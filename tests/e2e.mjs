@@ -79,6 +79,9 @@ const click = (text) => `(() => {
 })()`
 const body = `document.body.innerText`
 
+// start from an empty database: leftovers from a previous run would make results meaningless
+await fetch('http://127.0.0.1:8080/emulator/v1/projects/demo-sisu/databases/(default)/documents', { method: 'DELETE' })
+
 // ---------------------------------------------------------------- phone
 const phone = await launch(9501, 'phone')
 await phone.send('Page.navigate', { url: APP })
@@ -101,6 +104,56 @@ check('starter routines saved to Firestore', routines.length === 3, `${routines.
 if (!routines.length) { log(await phone.ev(body)); process.exit(1) }
 const push = routines.map(plain).find((r) => r.name === 'Push')
 check('routine carries muscles for the schedule app', (push?.muscles?.values?.length ?? 0) > 0, JSON.stringify(push?.muscles ?? {}).slice(0, 120))
+await phone.ev("location.hash = '#/'")
+await sleep(1200)
+
+// ---------------------------------------------------------------- exercise library
+await phone.ev("location.hash = '#/exercises'")
+await sleep(1500)
+const lib = await phone.ev(body)
+check('built-in catalogue is listed', /Bench Press/.test(lib) && /Back Squat/.test(lib), lib.split('\n')[1])
+
+// filtering narrows the list
+await phone.ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Calves')?.click()`)
+await sleep(800)
+const filtered = await phone.ev(body)
+check('filtering by muscle works', /Calf Raise/.test(filtered) && !/Bench Press/.test(filtered))
+await phone.ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'All')?.click()`)
+await sleep(600)
+
+// add one of your own, through the UI
+await phone.ev(`document.querySelector('[aria-label="New exercise"]').click()`)
+await sleep(1200)
+// React controlled inputs need the native setter, otherwise onChange never fires
+await phone.ev(`(() => {
+  const dialog = document.querySelector('[role="dialog"]')
+  const input = dialog.querySelector('input[placeholder="Name"]')
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, 'Cable Pullover')
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  return input.value
+})()`)
+await sleep(400)
+await phone.ev(`(() => {
+  const dialog = document.querySelector('[role="dialog"]')
+  const buttons = [...dialog.querySelectorAll('button')]
+  buttons.find((b) => b.textContent.trim() === 'Back').click()   // main muscle
+  return true
+})()`)
+await sleep(400)
+await phone.ev(`(() => {
+  const dialog = document.querySelector('[role="dialog"]')
+  const add = [...dialog.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Add exercise')
+  if (!add) return 'NOT FOUND'
+  add.click()
+  return 'clicked'
+})()`)
+await sleep(2500)
+const custom = (await listDocs('exercises')).map(plain)
+check('a custom exercise is saved', custom.length === 1 && custom[0].name === 'Cable Pullover', JSON.stringify(custom))
+check('it carries a main muscle from the shared list', custom[0]?.muscle === 'back', String(custom[0]?.muscle))
+check('it appears in the list as yours', /Cable Pullover/.test(await phone.ev(body)))
+await phone.shot('e2e-exercises')
+
 await phone.ev("location.hash = '#/'")
 await sleep(1200)
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Check, Minus, Pencil, Play, Plus, Trash2 } from 'lucide-react'
+import { Check, ChevronRight, Dumbbell, Minus, Pencil, Play, Plus, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { deleteRoutine, fromKg, LIBRARY, MUSCLES, muscleLabel, newId, saveRoutine, seedRoutines, startSession, useStore, type MuscleId, type Routine } from '../store'
 import { Block, btn, Page, Sheet, spring, Tap } from '../ui'
@@ -29,6 +29,19 @@ export default function Workouts() {
         </Tap>
       }
     >
+      <Block>
+        <Tap onClick={() => navigate('/exercises')} className="card flex w-full items-center gap-3 p-4 text-left">
+          <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-volt">
+            <Dumbbell size={18} />
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold">Exercise library</p>
+            <p className="text-xs text-zinc-500">Browse, and add your own</p>
+          </div>
+          <ChevronRight size={18} className="text-zinc-500" />
+        </Tap>
+      </Block>
+
       {routines.length === 0 && (
         <Block className="card p-6 text-center">
           <p className="font-display text-xl font-semibold">No routines yet</p>

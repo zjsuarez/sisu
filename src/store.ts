@@ -17,14 +17,12 @@ import {
 } from 'firebase/firestore'
 import { auth, db } from './firebase'
 
+import { BUILT_IN, type Exercise, type MuscleId } from './exercises'
+
 // Schema: FIREBASE_SCHEMA.md (shared with the schedule app)
 
-export const MUSCLES = {
-  chest: 'Chest', back: 'Back', shoulders: 'Shoulders', biceps: 'Biceps', triceps: 'Triceps', forearms: 'Forearms',
-  core: 'Core', quads: 'Quads', hamstrings: 'Hamstrings', glutes: 'Glutes', calves: 'Calves', cardio: 'Cardio',
-} as const
-export type MuscleId = keyof typeof MUSCLES
-export const muscleLabel = (ids: MuscleId[]) => ids.map((m) => MUSCLES[m] ?? m).join(' · ')
+export { MUSCLES, MUSCLE_IDS, muscleLabel } from './exercises'
+export type { Exercise, MuscleId } from './exercises'
 
 export type SetLog = { weight: number; reps: number; done?: boolean }
 export type ExerciseLog = { name: string; sets: SetLog[] }
@@ -64,6 +62,8 @@ export type State = {
   authError: string | null
   profile: Profile
   routines: Routine[]
+  /** the built-in catalogue plus the user's own, by name */
+  exercises: Exercise[]
   sessions: Session[]
   slots: Slot[]
   devices: Device[]
@@ -155,6 +155,7 @@ let state: State = {
   authError: null,
   profile: { name: 'Athlete', ...DEFAULT_SETTINGS },
   routines: [],
+  exercises: BUILT_IN,
   sessions: [],
   slots: [],
   devices: [],
@@ -190,7 +191,7 @@ const fail = (e: unknown) => {
 // ponytail: every path lives here; Sisu only ever writes under users/{uid}/apps/gym
 
 const gymRef = (uid: string) => doc(db, 'users', uid, 'apps', 'gym')
-const col = (uid: string, name: 'routines' | 'sessions' | 'slots' | 'devices') => collection(db, 'users', uid, 'apps', 'gym', name)
+const col = (uid: string, name: 'routines' | 'exercises' | 'sessions' | 'slots' | 'devices') => collection(db, 'users', uid, 'apps', 'gym', name)
 const me = () => state.user?.uid ?? '' // actions are only reachable after sign-in
 
 const ms = (t: unknown) => (t instanceof Timestamp ? t.toMillis() : null)
@@ -224,6 +225,7 @@ onAuthStateChanged(auth, (user) => {
     user,
     profile: { name: firstName(user), ...DEFAULT_SETTINGS },
     routines: [],
+    exercises: BUILT_IN,
     sessions: [],
     slots: [],
     devices: [],
@@ -284,6 +286,18 @@ function listen(user: User) {
           .sort((a, b) => b.at - a.at),
       })
       track('sessions', pendingDocs(snap), snap.metadata.fromCache)
+    }),
+    onSnapshot(col(uid, 'exercises'), meta, (snap: QuerySnapshot) => {
+      const custom: Exercise[] = snap.docs.map((d) => ({
+        id: d.id,
+        name: d.get('name'),
+        muscle: d.get('muscle'),
+        secondary: d.get('secondary') ?? [],
+        description: d.get('description') ?? null,
+        custom: true,
+      }))
+      set({ exercises: [...BUILT_IN, ...custom].sort((a, b) => a.name.localeCompare(b.name)) })
+      track('exercises', pendingDocs(snap), snap.metadata.fromCache)
     }),
     onSnapshot(col(uid, 'slots'), meta, (snap: QuerySnapshot) => {
       set({
@@ -540,6 +554,18 @@ export function removeDevice(id: string) {
 // new accounts start empty; the user opts in to starter routines (auto-seeding would race the schedule migration)
 export function seedRoutines() {
   SEED_ROUTINES.forEach((r, i) => setDoc(doc(col(me(), 'routines'), newId()), { ...r, createdAt: Timestamp.fromMillis(Date.now() + i) }).catch(fail))
+  heartbeat()
+}
+
+/** Custom exercises only: the built-ins live in code and are the same for everyone. */
+export function saveExercise(e: Omit<Exercise, 'custom'>) {
+  setDoc(doc(col(me(), 'exercises'), e.id), { name: e.name.trim(), muscle: e.muscle, secondary: e.secondary, description: e.description?.trim() || null }, { merge: true }).catch(fail)
+  heartbeat()
+}
+
+/** Past workouts keep the name they were logged with, so deleting one never rewrites history. */
+export function deleteExercise(id: string) {
+  deleteDoc(doc(col(me(), 'exercises'), id)).catch(fail)
   heartbeat()
 }
 

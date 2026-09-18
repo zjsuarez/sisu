@@ -1,7 +1,11 @@
 # Unified Firebase schema: Sisu + Schedule
 
-**Status: draft v3.1** — v3 plus the four fixes from `schedule-c8`'s review (migration skip condition, field-level slot writes, `title` rule, §3 wording). The user decided (§7): **both apps plan**, and a calendar slot sets day, time **and** routine. v1/v2 were written by the Sisu agent (`gymapp-b5`) and reviewed by the schedule agent (`schedule-d6`).
-**New in v3:** planned workouts become one shared collection, `apps/gym/slots`, written by both apps. Reviewed and agreed by the schedule agent. Sisu's half is implemented and tested against the emulators; nothing is deployed and no real data has been touched.
+**Status: draft v4.1** — v4 plus the three rules the schedule agent asked to have pinned down (times are both-or-neither, sessions always have times, editing a generated slot un-generates it). v4 was v3.1 plus the app the user actually specified: an exercise library, plans, per-set rep targets, effort (RIR/RPE), and optional times on a planned day. v1-v3 were written by the Sisu agent (`gymapp-ab`) and reviewed by the schedule agent across four rounds; v3.1 is what is deployed and working today.
+
+**What v4 changes, and who it touches:**
+- **Breaking for the schedule app:** a planned day may now have **no time** (`start`/`end` are nullable). The user's default is "no assigned time".
+- **Additive, invisible to the schedule app:** `plans`, `exercises`, per-set rep targets on routines, per-set effort on sessions, `planId`/`generated` on slots.
+- **Unchanged:** everything the schedule app reads today — `sessions[].date/start/end/title/muscles`, `routines[].name`, `slots[].date/routineId/title/sessionId`, and the sessions-only counting rule.
 
 Project `scheduleproject-8f615`, database `(default)`.
 
@@ -27,56 +31,73 @@ Project `scheduleproject-8f615`, database `(default)`.
 ## 2. `apps/gym` (owner: Sisu)
 
 ```
-users/{uid}/apps/gym                     { unit: 'kg'|'lb', weeklyGoal: number }
-users/{uid}/apps/gym/routines/{id}       { name, muscles: MuscleId[], exercises: RoutineExercise[], createdAt?: Timestamp }
-users/{uid}/apps/gym/sessions/{id}       { date, start, end, routineId: string|null, title, muscles: MuscleId[],
-                                           exercises: LoggedExercise[], deviceId, syncedAt: Timestamp }
-users/{uid}/apps/gym/slots/{id}          { date, start, end, routineId: string|null, title: string|null,
-                                           sessionId: string|null }                   <- co-owned, both apps
+users/{uid}/apps/gym                     { unit: 'kg'|'lb', weeklyGoal: number,
+                                           effort: 'rir'|'rpe'|'none', activePlanId: string|null }
+users/{uid}/apps/gym/exercises/{id}      { name, muscle: MuscleId, secondary: MuscleId[], description: string|null }
+users/{uid}/apps/gym/plans/{id}          { name, routineIds: string[], schedule: WeeklySchedule|null,
+                                           defaultStart: 'HH:MM'|null, defaultMinutes: number|null, createdAt: Timestamp }
+users/{uid}/apps/gym/routines/{id}       { name, planId: string|null, muscles: MuscleId[],
+                                           exercises: RoutineExercise[], createdAt?: Timestamp }
+users/{uid}/apps/gym/sessions/{id}       { date, start, end, routineId: string|null, planId: string|null, title,
+                                           muscles: MuscleId[], exercises: LoggedExercise[], deviceId, syncedAt: Timestamp }
+users/{uid}/apps/gym/slots/{id}          { date, start: 'HH:MM'|null, end: 'HH:MM'|null, routineId: string|null,
+                                           title: string|null, sessionId: string|null,
+                                           planId: string|null, generated: boolean }      <- co-owned, both apps
 users/{uid}/apps/gym/devices/{deviceId}  { name, type: 'phone'|'desktop', lastSyncedAt: Timestamp }
-users/{uid}/apps/gym/programs/{id}       later: a template that generates slots (§7)
 ```
 
 ```ts
 type MuscleId = 'chest'|'back'|'shoulders'|'biceps'|'triceps'|'forearms'|'core'|'quads'|'hamstrings'|'glutes'|'calves'|'cardio'
-type RoutineExercise = { name: string, sets: number, reps: number, weight: number }   // weight = starting target
-type LoggedExercise  = { name: string, sets: { weight: number, reps: number }[] }     // completed sets only
+type WeeklySchedule = { mon: string|null, tue: string|null, wed: string|null, thu: string|null, fri: string|null, sat: string|null, sun: string|null }  // routine id per weekday
+type RoutineExercise = { exerciseId: string, name: string, sets: { repsMin: number, repsMax: number }[] }
+type LoggedSet = { weight: number, reps: number, rir?: number, rpe?: number }   // weight in kg
+type LoggedExercise = { exerciseId: string, name: string, sets: LoggedSet[] }
 ```
 
 ### Field notes
 
 **`apps/gym` doc**
-- It may not exist. Subcollection docs don't create their parent, and every reader falls back to defaults (`kg`, `4`).
+- May not exist; every reader falls back to defaults (`kg`, `4`, `rir`, no active plan).
+- `effort` decides what the session logger asks for. It's a display/input setting, never a rewrite of history — see sets.
+- `activePlanId` — exactly one plan is active at a time (the user's decision).
+
+**Exercises**
+- This collection holds the **user's own** exercises. The built-in catalogue ships in Sisu's code with stable ids (`bench-press`, `back-squat`, …); a custom exercise gets a uuid. Ids are what sets point at, so renaming an exercise never splits its history.
+- `muscle` is the main muscle and is required, from the 12 the schedule app already uses. `secondary` is optional and does **not** count towards muscle summaries, or every press would read as a shoulder day.
+- A custom exercise can be deleted. Sessions keep the `name` they were logged with, so history survives it.
+
+**Plans**
+- A plan is a name, its routines, and **either a weekly pattern or nothing**. Rotations and N-day cycles were considered and dropped: they need an anchor date, re-projection, and pinning to survive manual edits, and they make the shared calendar rewrite itself.
+- `schedule: null` = the plan is just a set of routines. You plan individual days by hand, in either app. This is the user's own case, since their shifts rotate weekly.
+- A weekly pattern generates real slot documents 8 weeks ahead, topped up whenever Sisu opens, so the schedule app stays a dumb reader. Regeneration only ever touches **future** slots with `generated: true` and no `sessionId`. Slots created in either app by hand, and generated slots that were later edited, both carry `generated: false` and are never overwritten.
+- `defaultStart`/`defaultMinutes` may be null: "no assigned time".
 
 **Routines**
-- `createdAt` is optional and only used for ordering in Sisu. Routines migrated from Schedule don't have it and sort last.
-- Sisu never creates routines on its own. A new account sees an empty state with a "Start with Push/Pull/Legs" button.
+- `muscles` is derived from the main muscles of its exercises when the routine is saved. It stays stored because the schedule app reads it and because it keeps the document self-describing.
+- `sets` is one entry per set, each with a rep range. A fixed target is a range with both ends equal (10-10), so a set never changes shape when you switch between "10" and "8-10".
+- No target weight: the logger suggests what you actually lifted last time for that exercise.
 
 **Sessions**
-- **Calendar placement:** `date`/`start` = local day and time the workout started; `end` = the time it was finished.
-- **Duration:** derived from `start`/`end`, never stored.
-- **`title` + `muscles` are snapshots** of the routine at workout time. A logged workout is history, like a receipt: editing or deleting the routine later must not rewrite it.
-- **`routineId`** is `null` if the routine no longer exists or the session was imported without one.
-- **`exercises: []`** is valid. Workouts imported from Schedule have no sets.
-- **Writes:** sessions are created once, fully formed, with an ID generated on the device. Sisu never edits one afterwards.
-- **`deviceId`** is the Sisu device that logged it. Imported sessions use `'schedule-import'`.
-- **`syncedAt`** is `serverTimestamp()`, so it reads as `null` on the device until the server acknowledges the write. That's how the app shows "waiting to upload".
+- **`date`, `start` and `end` are always present.** A logged workout is a real block in time: the chronometer never produces a session without them. This is the counting path (hours, week and month stats), so a null here would be silent rather than loud.
+- Written once, fully formed, never edited. Deleting one is allowed **in Sisu only** (the accidental-start case); the schedule app offers no delete. That's a UI rule, not a database permission: both apps sign in as the same user.
+- Deleting a session clears `sessionId` on the slot it fulfilled, so that day goes back to planned.
+- **Effort is stored with its kind** (`rir` or `rpe`, never a bare number), so switching the setting later can't silently change what past numbers meant. Absent = not recorded.
+- `title` and `muscles` are snapshots of the routine at workout time: editing a routine must not rewrite history.
+- `exercises[].name` is likewise a snapshot, next to the `exerciseId` that links it to the library.
 
 **Slots (planned workouts)**
-- **Co-owned:** both apps create, edit and delete them. One document per slot, so two apps (or two devices) editing different slots never overwrite each other. Two edits to the *same* slot resolve last-write-wins, which is fine for one person.
-- **That shape is the whole point:** one shared list, so a workout planned in the calendar and one planned in Sisu are the same entry. Two parallel lists would drift.
-- `routineId` may be `null` (an unplanned "gym at 19:00"); `title` is the label for a slot **with no routine**, and stays `null` whenever `routineId` is set. Copying the routine name in would go stale the day the routine is renamed.
-- **`sessionId`** links the plan to the workout that fulfilled it. Sisu sets it when a workout started from that slot is finished; a workout started ad hoc attaches to the earliest unfulfilled slot the same day.
-- **Missed** = a slot in the past whose `sessionId` is still `null`. Nothing stores "missed"; it is derived.
-- Slots are not history: deleting one is normal, and it never affects logged sessions.
-- **Growth:** one document per planned workout, roughly 200 a year. Fulfilled past slots are dead weight, but deleting them on completion risks a zombie document if the other app writes the same slot moments later, and the `sessionId` link is what tells planned from ad-hoc. If it ever matters, prune fulfilled slots older than 30 days, which nothing is editing any more.
+- **Co-owned:** both apps create, edit and delete them, one document each. **Field-level writes only** (`{merge:true}` with just the changed fields): Sisu writes `sessionId` when a workout is done while the calendar may be editing the time, and a whole-document write would erase one of them, silently turning a finished workout into a missed one.
+- **Untimed is now valid.** `start`/`end` are null when the user hasn't assigned a time.
+- **Times are both-or-neither.** Either both are `'HH:MM'` or both are `null`. A start with no end has no duration, so there is nothing to draw in a calendar grid and no sane fallback. Anything else is a bug, and a reader may treat it as untimed.
+- **Editing a generated slot un-generates it.** Whichever app changes a slot's time, routine or day sets `generated: false` in the same patch. After that no regeneration will touch it, so a day you moved by hand survives a change to the plan. There is no separate "edited" flag to keep in sync.
+- **Horizon:** a weekly plan is materialised at most **8 weeks ahead**, rolling: Sisu tops it up when it opens. Nothing generates a year of dashed days into a collection the other app reads on every cold load.
+- `routineId` may be null (plain "gym"); `title` is the label only when there's no routine, and stays null when `routineId` is set.
+- `sessionId` links the plan to the workout that fulfilled it: the slot the workout started from, else the earliest unfulfilled slot the same day. **Missed** = a past slot whose `sessionId` is still null; it is derived, never stored.
+- `planId` + `generated` say where the slot came from, so a weekly pattern can be regenerated without destroying days you placed by hand.
+- **Growth:** one document per planned workout, roughly 200 a year. Fulfilled past slots are dead weight, but deleting them on completion risks a zombie document if the other app writes the same slot moments later. If it ever matters, prune fulfilled slots older than 30 days.
 
 **Devices**
-- **Owner:** each device writes only its own doc.
-- **`lastSyncedAt`** is the server time at which that device had no unsent writes.
-- **"Last workout from this device"** is derived from `sessions[].deviceId`, not stored.
-
----
+- Each device writes only its own doc. `lastSyncedAt` is the server time at which it had no unsent writes. "Last workout from this device" is derived from `sessions[].deviceId`.
 
 ## 3. Changes in Schedule (owner: Schedule)
 

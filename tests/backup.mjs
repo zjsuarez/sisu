@@ -31,6 +31,9 @@ const check = (name, ok, detail = '') => {
   if (!ok) failures++
 }
 
+// start from an empty database: leftovers from a previous run would make results meaningless
+await fetch('http://127.0.0.1:8080/emulator/v1/projects/demo-sisu/databases/(default)/documents', { method: 'DELETE' })
+
 const proc = spawn('C:/Program Files/Google/Chrome/Application/chrome.exe', ['--headless=new', '--remote-debugging-port=9801', `--user-data-dir=${dir}`, 'about:blank'], { stdio: 'ignore' })
 let ws
 for (let i = 0; i < 60 && !ws; i++) {
