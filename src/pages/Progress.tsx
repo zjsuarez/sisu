@@ -59,7 +59,7 @@ export default function Progress() {
           <div className="card p-6 text-center text-sm text-zinc-500">Finish a workout to set your first PR.</div>
         ) : (
           <div className="card divide-y divide-line">
-            {st.prs.map(([name, set]) => (
+            {st.prs.map(({ name, set }) => (
               <div key={name} className="flex items-center justify-between px-5 py-3.5">
                 <span className="text-sm">{name}</span>
                 <span className="font-display font-semibold tabular-nums">

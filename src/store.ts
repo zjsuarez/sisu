@@ -24,10 +24,17 @@ import { BUILT_IN, type Exercise, type MuscleId } from './exercises'
 export { MUSCLES, MUSCLE_IDS, muscleLabel } from './exercises'
 export type { Exercise, MuscleId } from './exercises'
 
-export type SetLog = { weight: number; reps: number; done?: boolean }
-export type ExerciseLog = { name: string; sets: SetLog[] }
-export type RoutineExercise = { name: string; sets: number; reps: number; weight: number }
-export type Routine = { id: string; name: string; muscles: MuscleId[]; exercises: RoutineExercise[] }
+/** effort is stored with its kind, never a bare number: switching the setting must not reinterpret history */
+export type SetLog = { weight: number; reps: number; rir?: number; rpe?: number; done?: boolean }
+export type ExerciseLog = { exerciseId: string; name: string; sets: SetLog[] }
+/** a fixed target is a range with both ends equal, so a set never changes shape */
+export type RepTarget = { repsMin: number; repsMax: number }
+export type RoutineExercise = { exerciseId: string; name: string; sets: RepTarget[] }
+export type Routine = { id: string; name: string; planId: string | null; muscles: MuscleId[]; exercises: RoutineExercise[] }
+export type WeekdayId = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
+export type WeeklySchedule = Record<WeekdayId, string | null>
+/** A plan is a name, its routines, and either a weekly pattern or nothing at all. */
+export type Plan = { id: string; name: string; routineIds: string[]; schedule: WeeklySchedule | null; defaultStart: string | null; defaultMinutes: number | null }
 export type Session = {
   id: string
   date: string // 'YYYY-MM-DD' local
@@ -54,13 +61,16 @@ export type Slot = {
   sessionId: string | null // set when a logged workout fulfils this slot; null = still planned
   at: number // derived: local ms of date + start
 }
-export type Active = { routineId: string; routine: string; muscles: MuscleId[]; startedAt: number; exercises: ExerciseLog[]; slotId: string | null }
-export type Profile = { name: string; unit: 'kg' | 'lb'; weeklyGoal: number }
+export type ActiveExercise = ExerciseLog & { targets: RepTarget[] }
+export type Active = { routineId: string; routine: string; muscles: MuscleId[]; startedAt: number; exercises: ActiveExercise[]; slotId: string | null }
+export type Effort = 'rir' | 'rpe' | 'none'
+export type Profile = { name: string; unit: 'kg' | 'lb'; weeklyGoal: number; effort: Effort; activePlanId: string | null }
 export type Sync = { waiting: number; inSync: boolean; online: boolean; error: string | null }
 export type State = {
   user: User | null | undefined // undefined while the saved sign-in is being restored
   authError: string | null
   profile: Profile
+  plans: Plan[]
   routines: Routine[]
   /** the built-in catalogue plus the user's own, by name */
   exercises: Exercise[]
@@ -73,22 +83,27 @@ export type State = {
   sync: Sync
 }
 
-export const LIBRARY = [
-  'Bench Press', 'Incline Dumbbell Press', 'Overhead Press', 'Lateral Raise', 'Tricep Pushdown',
-  'Deadlift', 'Barbell Row', 'Pull-up', 'Lat Pulldown', 'Bicep Curl', 'Face Pull',
-  'Back Squat', 'Romanian Deadlift', 'Leg Press', 'Walking Lunge', 'Leg Curl', 'Calf Raise',
-  'Hip Thrust', 'Plank', 'Cable Crunch',
+export const WEEKDAYS: { id: WeekdayId; label: string }[] = [
+  { id: 'mon', label: 'Mon' }, { id: 'tue', label: 'Tue' }, { id: 'wed', label: 'Wed' }, { id: 'thu', label: 'Thu' },
+  { id: 'fri', label: 'Fri' }, { id: 'sat', label: 'Sat' }, { id: 'sun', label: 'Sun' },
 ]
 
-const ex = (name: string, sets: number, reps: number, weight: number): RoutineExercise => ({ name, sets, reps, weight })
+export const repLabel = (t: RepTarget) => (t.repsMin === t.repsMax ? `${t.repsMax}` : `${t.repsMin}-${t.repsMax}`)
+export const sameTarget = (a: RepTarget, b: RepTarget) => a.repsMin === b.repsMin && a.repsMax === b.repsMax
 
-const SEED_ROUTINES: Omit<Routine, 'id'>[] = [
-  { name: 'Push', muscles: ['chest', 'shoulders', 'triceps'], exercises: [ex('Bench Press', 4, 8, 60), ex('Overhead Press', 3, 8, 40), ex('Incline Dumbbell Press', 3, 10, 22), ex('Tricep Pushdown', 3, 12, 25)] },
-  { name: 'Pull', muscles: ['back', 'biceps'], exercises: [ex('Deadlift', 3, 5, 100), ex('Pull-up', 3, 8, 0), ex('Barbell Row', 3, 8, 60), ex('Bicep Curl', 3, 12, 12)] },
-  { name: 'Legs', muscles: ['quads', 'hamstrings', 'glutes', 'calves'], exercises: [ex('Back Squat', 4, 6, 80), ex('Romanian Deadlift', 3, 10, 70), ex('Leg Press', 3, 12, 140), ex('Calf Raise', 4, 15, 40)] },
+const seedEx = (exerciseId: string, sets: number, reps: number): RoutineExercise => ({
+  exerciseId,
+  name: BUILT_IN.find((x) => x.id === exerciseId)?.name ?? exerciseId,
+  sets: Array.from({ length: sets }, () => ({ repsMin: reps, repsMax: reps })),
+})
+
+const SEED_ROUTINES: { name: string; exercises: RoutineExercise[] }[] = [
+  { name: 'Push', exercises: [seedEx('bench-press', 4, 8), seedEx('overhead-press', 3, 8), seedEx('incline-dumbbell-press', 3, 10), seedEx('tricep-pushdown', 3, 12)] },
+  { name: 'Pull', exercises: [seedEx('deadlift', 3, 5), seedEx('pull-up', 3, 8), seedEx('barbell-row', 3, 8), seedEx('barbell-curl', 3, 12)] },
+  { name: 'Legs', exercises: [seedEx('back-squat', 4, 6), seedEx('romanian-deadlift', 3, 10), seedEx('leg-press', 3, 12), seedEx('standing-calf-raise', 4, 15)] },
 ]
 
-const DEFAULT_SETTINGS = { unit: 'kg' as const, weeklyGoal: 4 }
+const DEFAULT_SETTINGS = { unit: 'kg' as const, weeklyGoal: 4, effort: 'rir' as const, activePlanId: null }
 
 export const newId = () => crypto.randomUUID()
 
@@ -154,6 +169,7 @@ let state: State = {
   user: undefined,
   authError: null,
   profile: { name: 'Athlete', ...DEFAULT_SETTINGS },
+  plans: [],
   routines: [],
   exercises: BUILT_IN,
   sessions: [],
@@ -191,10 +207,27 @@ const fail = (e: unknown) => {
 // ponytail: every path lives here; Sisu only ever writes under users/{uid}/apps/gym
 
 const gymRef = (uid: string) => doc(db, 'users', uid, 'apps', 'gym')
-const col = (uid: string, name: 'routines' | 'exercises' | 'sessions' | 'slots' | 'devices') => collection(db, 'users', uid, 'apps', 'gym', name)
+const col = (uid: string, name: 'plans' | 'routines' | 'exercises' | 'sessions' | 'slots' | 'devices') => collection(db, 'users', uid, 'apps', 'gym', name)
 const me = () => state.user?.uid ?? '' // actions are only reachable after sign-in
 
 const ms = (t: unknown) => (t instanceof Timestamp ? t.toMillis() : null)
+
+/* ---------- reading documents written before exercises had ids ---------- */
+
+const slug = (name: string) => String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-')
+const idForName = (name: string) => BUILT_IN.find((x) => x.name.toLowerCase() === String(name).toLowerCase())?.id ?? slug(name)
+
+type LegacyRoutineExercise = { name: string; sets: number; reps: number }
+const readRoutineExercise = (e: RoutineExercise | LegacyRoutineExercise): RoutineExercise =>
+  Array.isArray(e.sets)
+    ? { exerciseId: (e as RoutineExercise).exerciseId ?? idForName(e.name), name: e.name, sets: e.sets }
+    : { exerciseId: idForName(e.name), name: e.name, sets: Array.from({ length: (e as LegacyRoutineExercise).sets || 3 }, () => ({ repsMin: (e as LegacyRoutineExercise).reps || 10, repsMax: (e as LegacyRoutineExercise).reps || 10 })) }
+
+const readLoggedExercise = (e: { exerciseId?: string; name: string; sets: SetLog[] }): ExerciseLog => ({
+  exerciseId: e.exerciseId ?? idForName(e.name),
+  name: e.name,
+  sets: e.sets ?? [],
+})
 
 /* ---------- auth + live data ---------- */
 
@@ -224,6 +257,7 @@ onAuthStateChanged(auth, (user) => {
   set({
     user,
     profile: { name: firstName(user), ...DEFAULT_SETTINGS },
+    plans: [],
     routines: [],
     exercises: BUILT_IN,
     sessions: [],
@@ -250,8 +284,32 @@ function listen(user: User) {
 
   unsubs.push(
     onSnapshot(gymRef(uid), meta, (snap: DocumentSnapshot) => {
-      set({ profile: { name: firstName(user), unit: snap.get('unit') ?? DEFAULT_SETTINGS.unit, weeklyGoal: snap.get('weeklyGoal') ?? DEFAULT_SETTINGS.weeklyGoal } })
+      set({
+        profile: {
+          name: firstName(user),
+          unit: snap.get('unit') ?? DEFAULT_SETTINGS.unit,
+          weeklyGoal: snap.get('weeklyGoal') ?? DEFAULT_SETTINGS.weeklyGoal,
+          effort: snap.get('effort') ?? DEFAULT_SETTINGS.effort,
+          activePlanId: snap.get('activePlanId') ?? null,
+        },
+      })
       track('gym', snap.metadata.hasPendingWrites ? 1 : 0, snap.metadata.fromCache)
+    }),
+    onSnapshot(col(uid, 'plans'), meta, (snap: QuerySnapshot) => {
+      const order = (c: unknown) => ms(c) ?? Infinity
+      set({
+        plans: snap.docs
+          .sort((a, b) => order(a.get('createdAt')) - order(b.get('createdAt')))
+          .map((d) => ({
+            id: d.id,
+            name: d.get('name'),
+            routineIds: d.get('routineIds') ?? [],
+            schedule: d.get('schedule') ?? null,
+            defaultStart: d.get('defaultStart') ?? null,
+            defaultMinutes: d.get('defaultMinutes') ?? null,
+          })),
+      })
+      track('plans', pendingDocs(snap), snap.metadata.fromCache)
     }),
     onSnapshot(col(uid, 'routines'), meta, (snap: QuerySnapshot) => {
       // no query, sorted here: routines migrated from the schedule app have no createdAt and go last
@@ -259,7 +317,13 @@ function listen(user: User) {
       set({
         routines: snap.docs
           .sort((a, b) => order(a.get('createdAt')) - order(b.get('createdAt')) || String(a.get('name')).localeCompare(b.get('name')))
-          .map((d) => ({ id: d.id, name: d.get('name'), muscles: d.get('muscles') ?? [], exercises: d.get('exercises') ?? [] })),
+          .map((d) => ({
+            id: d.id,
+            name: d.get('name'),
+            planId: d.get('planId') ?? null,
+            muscles: d.get('muscles') ?? [],
+            exercises: (d.get('exercises') ?? []).map(readRoutineExercise),
+          })),
       })
       track('routines', pendingDocs(snap), snap.metadata.fromCache)
     }),
@@ -276,7 +340,7 @@ function listen(user: User) {
               routineId: x.routineId ?? null,
               title: x.title,
               muscles: x.muscles ?? [],
-              exercises: x.exercises ?? [],
+              exercises: (x.exercises ?? []).map(readLoggedExercise),
               deviceId: x.deviceId,
               syncedAt: ms(x.syncedAt),
               at: toMs(x.date, x.start),
@@ -364,8 +428,8 @@ function uploadLegacy(uid: string) {
         end: hm(s.date),
         routineId: null,
         title: s.routine,
-        muscles: SEED_ROUTINES.find((r) => r.name === s.routine)?.muscles ?? [],
-        exercises: s.exercises.map((e) => ({ name: e.name, sets: e.sets.filter((x) => x.done !== false).map(({ weight, reps }) => ({ weight, reps })) })),
+        muscles: [],
+        exercises: s.exercises.map((e) => ({ exerciseId: idForName(e.name), name: e.name, sets: e.sets.filter((x) => x.done !== false).map(({ weight, reps }) => ({ weight, reps })) })),
         deviceId,
         syncedAt: serverTimestamp(),
       })
@@ -408,7 +472,8 @@ function setActive(active: Active | null) {
 }
 
 // the most recent logged set for an exercise, so a new workout starts where the last one ended
-const lastSet = (name: string) => state.sessions.find((s) => s.exercises.some((e) => e.name === name))?.exercises.find((e) => e.name === name)?.sets.at(-1)
+export const lastSet = (exerciseId: string) =>
+  state.sessions.find((s) => s.exercises.some((e) => e.exerciseId === exerciseId))?.exercises.find((e) => e.exerciseId === exerciseId)?.sets.at(-1)
 
 export const startSession = (r: Routine, slotId: string | null = null) =>
   setActive({
@@ -418,8 +483,15 @@ export const startSession = (r: Routine, slotId: string | null = null) =>
     slotId,
     startedAt: Date.now(),
     exercises: r.exercises.map((e) => {
-      const last = lastSet(e.name)
-      return { name: e.name, sets: Array.from({ length: e.sets }, () => ({ weight: last?.weight ?? e.weight, reps: last?.reps ?? e.reps, done: false })) }
+      const last = lastSet(e.exerciseId)
+      const targets = e.sets.length ? e.sets : [{ repsMin: 10, repsMax: 10 }]
+      return {
+        exerciseId: e.exerciseId,
+        name: e.name,
+        targets,
+        // weight comes from what you actually lifted last time; routines carry no target weight
+        sets: targets.map((t) => ({ weight: last?.weight ?? 0, reps: last?.reps ?? t.repsMax, done: false })),
+      }
     }),
   })
 
@@ -441,8 +513,14 @@ export const addSet = (ei: number) =>
     }),
   }))
 
-export const addExercise = (name: string) =>
-  editActive((a) => ({ ...a, exercises: [...a.exercises, { name, sets: [{ weight: 0, reps: 10, done: false }] }] }))
+export const addExercise = (exerciseId: string, name: string) =>
+  editActive((a) => {
+    const last = lastSet(exerciseId)
+    return {
+      ...a,
+      exercises: [...a.exercises, { exerciseId, name, targets: [{ repsMin: 10, repsMax: 10 }], sets: [{ weight: last?.weight ?? 0, reps: last?.reps ?? 10, done: false }] }],
+    }
+  })
 
 export const discardSession = () => setActive(null)
 
@@ -452,7 +530,13 @@ export function finishSession(end = hm(Date.now())) {
   if (!a) return
   setActive(null)
   const exercises = a.exercises
-    .map((e) => ({ name: e.name, sets: e.sets.filter((x) => x.done).map(({ weight, reps }) => ({ weight, reps })) }))
+    .map((e) => ({
+      exerciseId: e.exerciseId,
+      name: e.name,
+      sets: e.sets
+        .filter((x) => x.done)
+        .map(({ weight, reps, rir, rpe }) => ({ weight, reps, ...(rir !== undefined && { rir }), ...(rpe !== undefined && { rpe }) })),
+    }))
     .filter((e) => e.sets.length)
   if (!exercises.length) return // nothing logged, nothing saved
 
@@ -465,8 +549,9 @@ export function finishSession(end = hm(Date.now())) {
     start: hm(a.startedAt),
     end,
     routineId: a.routineId,
+    planId: state.routines.find((r) => r.id === a.routineId)?.planId ?? null,
     title: a.routine, // snapshot: history must not change when the routine is edited later
-    muscles: a.muscles, // snapshot, same reason
+    muscles: musclesOf(exercises), // snapshot of what was actually trained
     exercises,
     deviceId,
     syncedAt: serverTimestamp(),
@@ -551,11 +636,49 @@ export function removeDevice(id: string) {
   deleteDoc(doc(col(me(), 'devices'), id)).catch(fail)
 }
 
-// new accounts start empty; the user opts in to starter routines (auto-seeding would race the schedule migration)
-export function seedRoutines() {
-  SEED_ROUTINES.forEach((r, i) => setDoc(doc(col(me(), 'routines'), newId()), { ...r, createdAt: Timestamp.fromMillis(Date.now() + i) }).catch(fail))
+/** main muscles of the exercises involved; secondaries deliberately don't count */
+const musclesOf = (exercises: { exerciseId: string }[]): MuscleId[] => [
+  ...new Set(exercises.map((e) => state.exercises.find((x) => x.id === e.exerciseId)?.muscle).filter((m): m is MuscleId => !!m)),
+]
+
+// new accounts start empty; the user opts in (auto-seeding would race the schedule app's migration)
+export function seedStarterPlan() {
+  const uid = me()
+  const planId = newId()
+  const batch = writeBatch(db)
+  const routineIds = SEED_ROUTINES.map((r, i) => {
+    const id = newId()
+    batch.set(doc(col(uid, 'routines'), id), { name: r.name, planId, muscles: musclesOf(r.exercises), exercises: r.exercises, createdAt: Timestamp.fromMillis(Date.now() + i) })
+    return id
+  })
+  batch.set(doc(col(uid, 'plans'), planId), { name: 'Push Pull Legs', routineIds, schedule: null, defaultStart: null, defaultMinutes: null, createdAt: Timestamp.now() })
+  batch.set(gymRef(uid), { activePlanId: planId }, { merge: true })
+  batch.commit().catch(fail)
   heartbeat()
 }
+
+export function savePlan(plan: Plan) {
+  const isNew = !state.plans.some((x) => x.id === plan.id)
+  setDoc(
+    doc(col(me(), 'plans'), plan.id),
+    { name: plan.name.trim(), routineIds: plan.routineIds, schedule: plan.schedule, defaultStart: plan.defaultStart, defaultMinutes: plan.defaultMinutes, ...(isNew && { createdAt: Timestamp.now() }) },
+    { merge: true },
+  ).catch(fail)
+  heartbeat()
+}
+
+/** The routines survive: they just stop belonging to a plan. */
+export function deletePlan(id: string) {
+  const uid = me()
+  const batch = writeBatch(db)
+  batch.delete(doc(col(uid, 'plans'), id))
+  for (const r of state.routines.filter((r) => r.planId === id)) batch.set(doc(col(uid, 'routines'), r.id), { planId: null }, { merge: true })
+  if (state.profile.activePlanId === id) batch.set(gymRef(uid), { activePlanId: null }, { merge: true })
+  batch.commit().catch(fail)
+  heartbeat()
+}
+
+export const setActivePlan = (id: string | null) => setSettings({ activePlanId: id })
 
 /** Custom exercises only: the built-ins live in code and are the same for everyone. */
 export function saveExercise(e: Omit<Exercise, 'custom'>) {
@@ -571,16 +694,27 @@ export function deleteExercise(id: string) {
 
 export function saveRoutine(r: Routine) {
   const isNew = !state.routines.some((x) => x.id === r.id)
-  setDoc(doc(col(me(), 'routines'), r.id), { name: r.name, muscles: r.muscles, exercises: r.exercises, ...(isNew && { createdAt: Timestamp.now() }) }, { merge: true }).catch(fail)
+  setDoc(
+    doc(col(me(), 'routines'), r.id),
+    { name: r.name.trim(), planId: r.planId, muscles: musclesOf(r.exercises), exercises: r.exercises, ...(isNew && { createdAt: Timestamp.now() }) },
+    { merge: true },
+  ).catch(fail)
+  // keep the plan's order in sync when a routine joins one
+  const plan = state.plans.find((p) => p.id === r.planId)
+  if (plan && !plan.routineIds.includes(r.id)) savePlan({ ...plan, routineIds: [...plan.routineIds, r.id] })
   heartbeat()
 }
 
 export function deleteRoutine(id: string) {
-  deleteDoc(doc(col(me(), 'routines'), id)).catch(fail)
+  const uid = me()
+  const batch = writeBatch(db)
+  batch.delete(doc(col(uid, 'routines'), id))
+  for (const p of state.plans.filter((p) => p.routineIds.includes(id))) batch.set(doc(col(uid, 'plans'), p.id), { routineIds: p.routineIds.filter((x) => x !== id) }, { merge: true })
+  batch.commit().catch(fail)
   heartbeat()
 }
 
-export function setSettings(patch: Partial<Pick<Profile, 'unit' | 'weeklyGoal'>>) {
+export function setSettings(patch: Partial<Pick<Profile, 'unit' | 'weeklyGoal' | 'effort' | 'activePlanId'>>) {
   setDoc(gymRef(me()), patch, { merge: true }).catch(fail)
   heartbeat()
 }
@@ -624,11 +758,12 @@ export function stats(sessions: Session[], now = Date.now()) {
     return { from, volume: volume(sessions.filter((x) => x.at >= from && x.at < to).flatMap((x) => x.exercises)) }
   })
 
-  const prs = new Map<string, SetLog>()
+  // keyed by exercise id, so renaming one never splits its records
+  const prs = new Map<string, { name: string; set: SetLog }>()
   for (const e of sessions.flatMap((x) => x.exercises))
     for (const set of e.sets) {
-      const best = prs.get(e.name)
-      if (!best || set.weight > best.weight || (set.weight === best.weight && set.reps > best.reps)) prs.set(e.name, set)
+      const best = prs.get(e.exerciseId)?.set
+      if (!best || set.weight > best.weight || (set.weight === best.weight && set.reps > best.reps)) prs.set(e.exerciseId, { name: e.name, set })
     }
 
   const weekDays = Array.from({ length: 7 }, (_, i) => days.has(new Date(week).setDate(new Date(week).getDate() + i)))
@@ -639,7 +774,7 @@ export function stats(sessions: Session[], now = Date.now()) {
     streak,
     weeks,
     weekDays,
-    prs: [...prs].sort((a, b) => b[1].weight - a[1].weight),
+    prs: [...prs.values()].sort((a, b) => b.set.weight - a.set.weight),
     totalVolume: volume(sessions.flatMap((x) => x.exercises)),
   }
 }

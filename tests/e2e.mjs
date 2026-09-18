@@ -107,6 +107,33 @@ check('routine carries muscles for the schedule app', (push?.muscles?.values?.le
 await phone.ev("location.hash = '#/'")
 await sleep(1200)
 
+// ---------------------------------------------------------------- plan and routine shapes
+const plans = await listDocs('plans')
+const planId = plans[0]?.name.split('/').pop()
+check('the starter plan exists', plans.length === 1 && plain(plans[0]).name === 'Push Pull Legs', JSON.stringify(plans.map(plain)))
+check('it lists its three routines', JSON.stringify(plans[0]?.fields?.routineIds ?? {}).split('stringValue').length - 1 === 3)
+const gym = plain((await rest(`users/${UID}/apps/gym`)) ?? {})
+check('and it is the active plan', gym.activePlanId === planId, String(gym.activePlanId))
+
+const pushDoc = (await listDocs('routines')).find((d) => plain(d).name === 'Push')
+const pushId = pushDoc.name.split('/').pop()
+check('routines belong to the plan', plain(pushDoc).planId === planId)
+check('targets are per-set rep ranges', JSON.stringify(pushDoc).includes('repsMin') && JSON.stringify(pushDoc).includes('repsMax'))
+check('exercises carry stable ids, not just names', JSON.stringify(pushDoc).includes('bench-press'))
+const setsBefore = JSON.stringify(pushDoc).split('repsMin').length - 1
+
+// edit it through the UI: add a set to the first exercise, save
+await phone.ev(`location.hash = '#/routine/${pushId}'`)
+await sleep(1800)
+log('  add set:', await phone.ev(click('Add set')))
+await sleep(700)
+await phone.shot('e2e-routine')
+await sleep(600)
+log('  save:', await phone.ev(click('Save routine')))
+await sleep(2500)
+const pushAfter = (await listDocs('routines')).find((d) => plain(d).name === 'Push')
+check('editing a routine saves the new set', JSON.stringify(pushAfter).split('repsMin').length - 1 === setsBefore + 1, `${setsBefore} -> ${JSON.stringify(pushAfter).split('repsMin').length - 1}`)
+
 // ---------------------------------------------------------------- exercise library
 await phone.ev("location.hash = '#/exercises'")
 await sleep(1500)

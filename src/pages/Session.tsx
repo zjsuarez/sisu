@@ -2,12 +2,19 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Check, Plus, Timer, X } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, LIBRARY, toKg, useStore, volume } from '../store'
+import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, MUSCLES, repLabel, toKg, useStore, volume } from '../store'
 import { btn, fmtCompact, fmtDuration, Sheet, spring, Tap } from '../ui'
 
 const REST_SEC = 90
 
 const nowHm = () => new Date().toTimeString().slice(0, 5)
+
+/** what the routine asked for: "3 × 8-10", or each set when they differ */
+const targetLabel = (targets: { repsMin: number; repsMax: number }[]) => {
+  if (!targets.length) return 'added on the fly'
+  const first = repLabel(targets[0])
+  return targets.every((t) => repLabel(t) === first) ? `${targets.length} × ${first} reps` : targets.map(repLabel).join(' · ') + ' reps'
+}
 
 function useNow() {
   const [now, setNow] = useState(Date.now)
@@ -19,7 +26,7 @@ function useNow() {
 }
 
 export default function Session() {
-  const { active: live, profile } = useStore()
+  const { active: live, profile, exercises } = useStore()
   // keep rendering the last session while the exit animation runs after finish/discard
   const [last, setLast] = useState(live)
   if (live && live !== last) setLast(live)
@@ -28,6 +35,7 @@ export default function Session() {
   const now = useNow()
   const [restUntil, setRestUntil] = useState<number | null>(null)
   const [picking, setPicking] = useState(false)
+  const [query, setQuery] = useState('')
 
   const restLeft = restUntil ? Math.max(0, Math.ceil((restUntil - now) / 1000)) : 0
   useEffect(() => {
@@ -107,7 +115,8 @@ export default function Session() {
             transition={{ ...spring, delay: ei * 0.05 }}
             className="card p-4"
           >
-            <h2 className="mb-3 font-display text-lg font-semibold">{e.name}</h2>
+            <h2 className="font-display text-lg font-semibold">{e.name}</h2>
+            <p className="mb-3 text-xs text-zinc-500">{targetLabel(e.targets)}</p>
             <div className="mb-1 grid grid-cols-[2rem_1fr_1fr_3rem] gap-2 px-1 text-[11px] font-semibold tracking-wider text-zinc-500 uppercase">
               <span>Set</span>
               <span className="text-center">{profile.unit}</span>
@@ -188,19 +197,36 @@ export default function Session() {
       </AnimatePresence>
 
       <Sheet open={picking} onClose={() => setPicking(false)} title="Add exercise">
-        <div className="space-y-1 pb-4">
-          {LIBRARY.map((name) => (
-            <Tap
-              key={name}
-              onClick={() => {
-                addExercise(name)
-                setPicking(false)
-              }}
-              className="flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-left hover:bg-surface-2"
-            >
-              {name} <Plus size={16} className="text-zinc-500" />
-            </Tap>
-          ))}
+        <div className="space-y-3 pb-4">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search"
+            autoFocus
+            className="w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-volt"
+          />
+          <div className="space-y-1">
+            {exercises
+              .filter((x) => !query.trim() || x.name.toLowerCase().includes(query.trim().toLowerCase()))
+              .slice(0, 40)
+              .map((x) => (
+                <Tap
+                  key={x.id}
+                  onClick={() => {
+                    addExercise(x.id, x.name)
+                    setPicking(false)
+                    setQuery('')
+                  }}
+                  className="flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-left hover:bg-surface-2"
+                >
+                  <span>
+                    {x.name}
+                    <span className="ml-2 text-xs text-zinc-500">{MUSCLES[x.muscle]}</span>
+                  </span>
+                  <Plus size={16} className="text-zinc-500" />
+                </Tap>
+              ))}
+          </div>
         </div>
       </Sheet>
     </motion.main>

@@ -6,6 +6,7 @@ import { spring } from './ui'
 import Today from './pages/Today'
 import Workouts from './pages/Workouts'
 import Exercises from './pages/Exercises'
+import RoutineEditor from './pages/Routine'
 import Session from './pages/Session'
 import Progress from './pages/Progress'
 import Profile from './pages/Profile'
@@ -21,7 +22,7 @@ const TABS = [
 export default function App() {
   const location = useLocation()
   const { user } = useStore()
-  const inSession = location.pathname === '/session'
+  const fullScreen = location.pathname === '/session' || location.pathname.startsWith('/routine/')
 
   // undefined = still restoring the saved sign-in from this device; that works offline, so no timeout to the sign-in screen
   if (user === undefined) return <Splash />
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/" element={<Today />} />
           <Route path="/workouts" element={<Workouts />} />
           <Route path="/exercises" element={<Exercises />} />
+          <Route path="/routine/:id" element={<RoutineEditor />} />
           <Route path="/session" element={<Session />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/profile" element={<Profile />} />
@@ -44,7 +46,7 @@ export default function App() {
         </Routes>
       </AnimatePresence>
 
-      <AnimatePresence>{!inSession && <TabBar key="tabs" />}</AnimatePresence>
+      <AnimatePresence>{!fullScreen && <TabBar key="tabs" />}</AnimatePresence>
     </>
   )
 }
