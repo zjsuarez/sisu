@@ -1,12 +1,9 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Check, Pencil, Plus, Search, Trash2 } from 'lucide-react'
-import { deleteExercise, MUSCLE_IDS, MUSCLES, muscleLabel, newId, saveExercise, useStore, type Exercise, type MuscleId } from '../store'
-import { Block, btn, Page, Sheet, spring, Tap } from '../ui'
-
-type Draft = Omit<Exercise, 'custom'> & { isNew: boolean }
-
-const blank = (): Draft => ({ id: newId(), name: '', muscle: 'chest', secondary: [], description: null, isNew: true })
+import { Pencil, Plus, Search } from 'lucide-react'
+import { MUSCLE_IDS, MUSCLES, muscleLabel, useStore, type Exercise, type MuscleId } from '../store'
+import { blankExercise, ExerciseForm, type ExerciseDraft } from '../exerciseForm'
+import { Block, btn, Page, Sheet, Tap } from '../ui'
 const chip = (on: boolean) => `rounded-full border px-3.5 py-2 text-sm transition-colors ${on ? 'border-accent bg-accent/10 text-accent' : 'border-line text-zinc-400'}`
 const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent'
 
@@ -15,7 +12,7 @@ export default function Exercises() {
   const [query, setQuery] = useState('')
   const [muscle, setMuscle] = useState<MuscleId | null>(null)
   const [open, setOpen] = useState<Exercise | null>(null)
-  const [draft, setDraft] = useState<Draft | null>(null)
+  const [draft, setDraft] = useState<ExerciseDraft | null>(null)
 
   const q = query.trim().toLowerCase()
   const shown = exercises.filter(
@@ -32,7 +29,7 @@ export default function Exercises() {
       subtitle={`${exercises.length} · ${exercises.filter((e) => e.custom).length} custom`}
       title="Exercises"
       action={
-        <Tap onClick={() => setDraft(blank())} aria-label="New exercise" className="grid size-12 place-items-center rounded-full bg-accent text-ink">
+        <Tap onClick={() => setDraft(blankExercise())} aria-label="New exercise" className="grid size-12 place-items-center rounded-full bg-accent text-ink">
           <Plus size={24} />
         </Tap>
       }
@@ -108,72 +105,8 @@ export default function Exercises() {
 
       {/* create / edit */}
       <Sheet open={!!draft} onClose={() => setDraft(null)} title={draft?.isNew ? 'New exercise' : 'Edit exercise'}>
-        {draft && <Editor draft={draft} setDraft={setDraft} />}
+        {draft && <ExerciseForm draft={draft} setDraft={setDraft} />}
       </Sheet>
     </Page>
-  )
-}
-
-function Editor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft | null) => void }) {
-  const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch })
-  const toggleSecondary = (m: MuscleId) =>
-    set({ secondary: draft.secondary.includes(m) ? draft.secondary.filter((x) => x !== m) : [...draft.secondary, m] })
-
-  return (
-    <div className="space-y-4 pb-4">
-      <input className={field} placeholder="Name" value={draft.name} onChange={(e) => set({ name: e.target.value })} autoFocus={draft.isNew} />
-
-      <p className="pt-2 text-xs font-semibold tracking-widest text-muted uppercase">Muscle</p>
-      <div className="flex flex-wrap gap-2">
-        {MUSCLE_IDS.map((m) => (
-          <Tap key={m} onClick={() => set({ muscle: m, secondary: draft.secondary.filter((x) => x !== m) })} className={chip(draft.muscle === m)}>
-            {draft.muscle === m && <Check size={14} className="mr-1 inline" />}
-            {MUSCLES[m]}
-          </Tap>
-        ))}
-      </div>
-      <p className="pt-2 text-xs font-semibold tracking-widest text-muted uppercase">Also works</p>
-      <div className="flex flex-wrap gap-2">
-        {MUSCLE_IDS.filter((m) => m !== draft.muscle).map((m) => (
-          <Tap key={m} onClick={() => toggleSecondary(m)} className={chip(draft.secondary.includes(m))}>
-            {MUSCLES[m]}
-          </Tap>
-        ))}
-      </div>
-
-      <textarea
-        className={`${field} min-h-24 resize-none`}
-        placeholder="Notes"
-        value={draft.description ?? ''}
-        onChange={(e) => set({ description: e.target.value })}
-      />
-
-      <div className="sticky bottom-0 -mx-5 flex gap-3 bg-gradient-to-t from-surface via-surface to-transparent px-5 pt-6 pb-2">
-        {!draft.isNew && (
-          <Tap
-            onClick={() => {
-              if (!confirm(`Delete ${draft.name}? Past workouts keep it.`)) return
-              deleteExercise(draft.id)
-              setDraft(null)
-            }}
-            aria-label="Delete exercise"
-            className={`${btn.ghost} text-red-400`}
-          >
-            <Trash2 size={20} />
-          </Tap>
-        )}
-        <Tap
-          disabled={!draft.name.trim()}
-          onClick={() => {
-            saveExercise({ id: draft.id, name: draft.name, muscle: draft.muscle, secondary: draft.secondary, description: draft.description })
-            setDraft(null)
-          }}
-          transition={spring}
-          className={`${btn.primary} flex-1 disabled:opacity-40 disabled:shadow-none`}
-        >
-          {draft.isNew ? 'Add exercise' : 'Save'}
-        </Tap>
-      </div>
-    </div>
   )
 }

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { ArrowDown, ArrowUp, ChevronLeft, Copy, Plus, Search, Trash2, X } from 'lucide-react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { deleteRoutine, MUSCLES, newId, saveRoutine, useStore, type RepTarget, type Routine, type RoutineExercise } from '../store'
+import { blankExercise, ExerciseForm, type ExerciseDraft } from '../exerciseForm'
 import { btn, Sheet, spring, Tap } from '../ui'
 
 const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent'
@@ -27,6 +28,7 @@ export default function RoutineEditor() {
   )
   const [picking, setPicking] = useState(false)
   const [query, setQuery] = useState('')
+  const [newExercise, setNewExercise] = useState<ExerciseDraft | null>(null)
 
   const set = (patch: Partial<Routine>) => setDraft({ ...draft, ...patch })
   const setExercise = (i: number, patch: Partial<RoutineExercise>) =>
@@ -45,6 +47,12 @@ export default function RoutineEditor() {
 
   const q = query.trim().toLowerCase()
   const options = exercises.filter((e) => !q || e.name.toLowerCase().includes(q) || MUSCLES[e.muscle].toLowerCase().includes(q))
+
+  const addToRoutine = (exerciseId: string, name: string) => {
+    set({ exercises: [...draft.exercises, { exerciseId, name, sets: [{ repsMin: 8, repsMax: 10 }, { repsMin: 8, repsMax: 10 }, { repsMin: 8, repsMax: 10 }] }] })
+    setPicking(false)
+    setQuery('')
+  }
 
   const save = () => {
     saveRoutine({ ...draft, name: draft.name.trim() })
@@ -198,15 +206,7 @@ export default function RoutineEditor() {
           </div>
           <div className="space-y-1">
             {options.slice(0, 40).map((x) => (
-              <Tap
-                key={x.id}
-                onClick={() => {
-                  set({ exercises: [...draft.exercises, { exerciseId: x.id, name: x.name, sets: [{ repsMin: 8, repsMax: 10 }, { repsMin: 8, repsMax: 10 }, { repsMin: 8, repsMax: 10 }] }] })
-                  setPicking(false)
-                  setQuery('')
-                }}
-                className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left"
-              >
+              <Tap key={x.id} onClick={() => addToRoutine(x.id, x.name)} className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left">
                 <span>
                   {x.name}
                   <span className="ml-2 text-xs text-zinc-500">{MUSCLES[x.muscle]}</span>
@@ -214,9 +214,22 @@ export default function RoutineEditor() {
                 <Plus size={16} className="text-zinc-500" />
               </Tap>
             ))}
-            {options.length === 0 && <p className="p-4 text-center text-sm text-muted">No matches</p>}
+            <Tap
+              onClick={() => {
+                setPicking(false)
+                setNewExercise(blankExercise(query.trim()))
+              }}
+              className="flex w-full items-center justify-between rounded-2xl bg-surface-2 px-4 py-3 text-left"
+            >
+              <span>{query.trim() ? `New: ${query.trim()}` : 'New exercise'}</span>
+              <Plus size={16} className="text-muted" />
+            </Tap>
           </div>
         </div>
+      </Sheet>
+
+      <Sheet open={!!newExercise} onClose={() => setNewExercise(null)} title="New exercise">
+        {newExercise && <ExerciseForm draft={newExercise} setDraft={setNewExercise} onSaved={(e) => addToRoutine(e.id, e.name)} />}
       </Sheet>
     </motion.main>
   )

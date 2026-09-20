@@ -129,11 +129,49 @@ await sleep(1800)
 log('  add set:', await phone.ev(click('Add set')))
 await sleep(700)
 await phone.shot('e2e-routine')
+
 await sleep(600)
 log('  save:', await phone.ev(click('Save routine')))
 await sleep(2500)
 const pushAfter = (await listDocs('routines')).find((d) => plain(d).name === 'Push')
 check('editing a routine saves the new set', JSON.stringify(pushAfter).split('repsMin').length - 1 === setsBefore + 1, `${setsBefore} -> ${JSON.stringify(pushAfter).split('repsMin').length - 1}`)
+// create an exercise without leaving the routine: picker -> "New: ..." -> form -> straight in
+await phone.ev(`location.hash = '#/routine/${pushId}'`)
+await sleep(1500)
+await phone.ev(click('Add exercise'))
+await sleep(1200)
+await phone.ev(`(() => {
+  const dialog = document.querySelector('[role="dialog"]')
+  const input = dialog.querySelector('input[placeholder="Search"]')
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, 'Sled Push')
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+})()`)
+await sleep(600)
+const dialogClick = (text) =>
+  `(() => {
+  const dialog = document.querySelector('[role="dialog"]')
+  if (!dialog) return 'NO DIALOG'
+  const b = [...dialog.querySelectorAll('button')].find((x) => x.textContent.trim() === ` +
+  JSON.stringify(text) +
+  `)
+  if (!b) return 'NOT FOUND'
+  b.click()
+  return 'clicked'
+})()`
+log('  new:', await phone.ev(dialogClick('New: Sled Push')))
+await sleep(1200)
+log('  muscle:', await phone.ev(dialogClick('Quads')))
+await sleep(400)
+log('  add:', await phone.ev(dialogClick('Add exercise')))
+await sleep(1500)
+const withNew = await phone.ev(body)
+check('a new exercise goes straight into the routine', /Sled Push/.test(withNew))
+log('  save:', await phone.ev(click('Save routine')))
+await sleep(2500)
+const customs = (await listDocs('exercises')).map(plain)
+check('and it is saved to the library', customs.some((e) => e.name === 'Sled Push' && e.muscle === 'quads'), JSON.stringify(customs.map((e) => e.name)))
+const pushWithNew = (await listDocs('routines')).find((d) => plain(d).name === 'Push')
+check('the routine keeps it after saving', JSON.stringify(pushWithNew).includes('Sled Push'))
 
 // ---------------------------------------------------------------- exercise library
 await phone.ev("location.hash = '#/exercises'")
@@ -177,8 +215,9 @@ await phone.ev(`(() => {
 })()`)
 await sleep(2500)
 const custom = (await listDocs('exercises')).map(plain)
-check('a custom exercise is saved', custom.length === 1 && custom[0].name === 'Cable Pullover', JSON.stringify(custom))
-check('it carries a main muscle from the shared list', custom[0]?.muscle === 'back', String(custom[0]?.muscle))
+const pullover = custom.find((e) => e.name === 'Cable Pullover')
+check('a custom exercise is saved', !!pullover, JSON.stringify(custom.map((e) => e.name)))
+check('it carries a main muscle from the shared list', pullover?.muscle === 'back', String(pullover?.muscle))
 check('it appears in the list as yours', /Cable Pullover/.test(await phone.ev(body)))
 await phone.shot('e2e-exercises')
 
