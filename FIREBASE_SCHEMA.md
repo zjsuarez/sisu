@@ -1,6 +1,6 @@
 # Unified Firebase schema: Sisu + Schedule
 
-**Status: draft v4.1** — v4 plus the three rules the schedule agent asked to have pinned down (times are both-or-neither, sessions always have times, editing a generated slot un-generates it). v4 was v3.1 plus the app the user actually specified: an exercise library, plans, per-set rep targets, effort (RIR/RPE), and optional times on a planned day. v1-v3 were written by the Sisu agent (`gymapp-ab`) and reviewed by the schedule agent across four rounds; v3.1 is what is deployed and working today.
+**Status: draft v4.2** (adds `apps/gym/modifiers` and variant exercise ids; both invisible to the schedule app). Previously v4.1 — v4 plus the three rules the schedule agent asked to have pinned down (times are both-or-neither, sessions always have times, editing a generated slot un-generates it). v4 was v3.1 plus the app the user actually specified: an exercise library, plans, per-set rep targets, effort (RIR/RPE), and optional times on a planned day. v1-v3 were written by the Sisu agent (`gymapp-ab`) and reviewed by the schedule agent across four rounds; v3.1 is what is deployed and working today.
 
 **What v4 changes, and who it touches:**
 - **Breaking for the schedule app:** a planned day may now have **no time** (`start`/`end` are nullable). The user's default is "no assigned time".
@@ -34,6 +34,7 @@ Project `scheduleproject-8f615`, database `(default)`.
 users/{uid}/apps/gym                     { unit: 'kg'|'lb', weeklyGoal: number,
                                            effort: 'rir'|'rpe'|'none', activePlanId: string|null }
 users/{uid}/apps/gym/exercises/{id}      { name, muscle: MuscleId, secondary: MuscleId[], description: string|null }
+users/{uid}/apps/gym/modifiers/{id}      { label }                                  <- the user's own modifiers
 users/{uid}/apps/gym/plans/{id}          { name, routineIds: string[], schedule: WeeklySchedule|null,
                                            defaultStart: 'HH:MM'|null, defaultMinutes: number|null, createdAt: Timestamp }
 users/{uid}/apps/gym/routines/{id}       { name, planId: string|null, muscles: MuscleId[],
@@ -61,7 +62,11 @@ type LoggedExercise = { exerciseId: string, name: string, sets: LoggedSet[] }
 - `effort` decides what the session logger asks for. It's a display/input setting, never a rewrite of history — see sets.
 - `activePlanId` — exactly one plan is active at a time (the user's decision).
 
-**Exercises**
+**Exercises and modifiers**
+- **An exercise id may be a variant**: `bench-press~dumbbell+2ct-pause` is a base id, `~`, then modifier ids joined by `+`, in a fixed order so the same set of modifiers always produces the same id. A variant is never stored anywhere; it has its own history because logged sets point at ids. Rules and the catalogue: `CATALOGUE.md`.
+- **Modifiers never change the muscle.** A variant counts towards its base's muscle, so muscle summaries are unaffected.
+- `apps/gym/modifiers` holds only the user's own modifiers (a label); the built-in ones live in Sisu's code.
+- **Ids written before the re-cut still resolve** through an alias table (`chin-up` → `pull-up~supinated`), so old routines and logged workouts keep working.
 - This collection holds the **user's own** exercises. The built-in catalogue ships in Sisu's code with stable ids (`bench-press`, `back-squat`, …); a custom exercise gets a uuid. Ids are what sets point at, so renaming an exercise never splits its history.
 - `muscle` is the main muscle and is required, from the 12 the schedule app already uses. `secondary` is optional and does **not** count towards muscle summaries, or every press would read as a shoulder day.
 - A custom exercise can be deleted. Sessions keep the `name` they were logged with, so history survives it.

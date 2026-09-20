@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Check, Plus, Timer, X } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, MUSCLES, repLabel, toKg, useStore, volume } from '../store'
-import { blankExercise, ExerciseForm, type ExerciseDraft } from '../exerciseForm'
-import { btn, fmtCompact, fmtDuration, Sheet, spring, Tap } from '../ui'
+import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, repLabel, toKg, useStore, volume } from '../store'
+import { ExercisePicker } from '../exercisePicker'
+import { btn, fmtCompact, fmtDuration, spring, Tap } from '../ui'
 
 const REST_SEC = 90
 
@@ -27,7 +27,7 @@ function useNow() {
 }
 
 export default function Session() {
-  const { active: live, profile, exercises } = useStore()
+  const { active: live, profile } = useStore()
   // keep rendering the last session while the exit animation runs after finish/discard
   const [last, setLast] = useState(live)
   if (live && live !== last) setLast(live)
@@ -36,8 +36,6 @@ export default function Session() {
   const now = useNow()
   const [restUntil, setRestUntil] = useState<number | null>(null)
   const [picking, setPicking] = useState(false)
-  const [query, setQuery] = useState('')
-  const [newExercise, setNewExercise] = useState<ExerciseDraft | null>(null)
 
   const restLeft = restUntil ? Math.max(0, Math.ceil((restUntil - now) / 1000)) : 0
   useEffect(() => {
@@ -198,62 +196,7 @@ export default function Session() {
         )}
       </AnimatePresence>
 
-      <Sheet open={picking} onClose={() => setPicking(false)} title="Add exercise">
-        <div className="space-y-3 pb-4">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search"
-            autoFocus
-            className="w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent"
-          />
-          <div className="space-y-1">
-            {exercises
-              .filter((x) => !query.trim() || x.name.toLowerCase().includes(query.trim().toLowerCase()))
-              .slice(0, 40)
-              .map((x) => (
-                <Tap
-                  key={x.id}
-                  onClick={() => {
-                    addExercise(x.id, x.name)
-                    setPicking(false)
-                    setQuery('')
-                  }}
-                  className="flex w-full items-center justify-between rounded-2xl px-4 py-3.5 text-left hover:bg-surface-2"
-                >
-                  <span>
-                    {x.name}
-                    <span className="ml-2 text-xs text-zinc-500">{MUSCLES[x.muscle]}</span>
-                  </span>
-                  <Plus size={16} className="text-zinc-500" />
-                </Tap>
-              ))}
-            <Tap
-              onClick={() => {
-                setPicking(false)
-                setNewExercise(blankExercise(query.trim()))
-              }}
-              className="flex w-full items-center justify-between rounded-2xl bg-surface-2 px-4 py-3.5 text-left"
-            >
-              <span>{query.trim() ? `New: ${query.trim()}` : 'New exercise'}</span>
-              <Plus size={16} className="text-muted" />
-            </Tap>
-          </div>
-        </div>
-      </Sheet>
-
-      <Sheet open={!!newExercise} onClose={() => setNewExercise(null)} title="New exercise">
-        {newExercise && (
-          <ExerciseForm
-            draft={newExercise}
-            setDraft={setNewExercise}
-            onSaved={(e) => {
-              addExercise(e.id, e.name)
-              setQuery('')
-            }}
-          />
-        )}
-      </Sheet>
+      <ExercisePicker open={picking} onClose={() => setPicking(false)} onAdd={(picks) => picks.forEach((p) => addExercise(p.exerciseId, p.name))} />
     </motion.main>
   )
 }

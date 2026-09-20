@@ -12,7 +12,8 @@
     "dev:emulators": "vite --mode emulators",
     "build:emulators": "vite build --mode emulators",
     "test:e2e": "node tests/e2e.mjs",
-    "test:backup": "node tests/backup.mjs"
+    "test:backup": "node tests/backup.mjs",
+    "test:naming": "node --experimental-strip-types tests/naming.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

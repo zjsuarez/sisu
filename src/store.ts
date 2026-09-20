@@ -17,12 +17,12 @@ import {
 } from 'firebase/firestore'
 import { auth, db } from './firebase'
 
-import { BUILT_IN, type Exercise, type MuscleId } from './exercises'
+import { BUILT_IN, BUILT_IN_MODIFIERS, canonicalExerciseId, resolveExercise, type Exercise, type Modifier, type MuscleId } from './exercises'
 
 // Schema: FIREBASE_SCHEMA.md (shared with the schedule app)
 
-export { MUSCLES, MUSCLE_IDS, muscleLabel } from './exercises'
-export type { Exercise, MuscleId } from './exercises'
+export { MUSCLES, MUSCLE_IDS, muscleLabel, MODIFIER_GROUPS, BUILT_IN_MODIFIERS, buildExerciseId, splitExerciseId, variantName } from './exercises'
+export type { Exercise, Modifier, ModifierGroup, MuscleId, ResolvedExercise } from './exercises'
 
 /** effort is stored with its kind, never a bare number: switching the setting must not reinterpret history */
 export type SetLog = { weight: number; reps: number; rir?: number; rpe?: number; done?: boolean }
@@ -72,8 +72,10 @@ export type State = {
   profile: Profile
   plans: Plan[]
   routines: Routine[]
-  /** the built-in catalogue plus the user's own, by name */
+  /** base exercises: the built-in catalogue plus the user's own. Variants are ids, not records. */
   exercises: Exercise[]
+  /** built-in modifiers plus the user's own */
+  modifiers: Modifier[]
   sessions: Session[]
   slots: Slot[]
   devices: Device[]
@@ -93,14 +95,14 @@ export const sameTarget = (a: RepTarget, b: RepTarget) => a.repsMin === b.repsMi
 
 const seedEx = (exerciseId: string, sets: number, reps: number): RoutineExercise => ({
   exerciseId,
-  name: BUILT_IN.find((x) => x.id === exerciseId)?.name ?? exerciseId,
+  name: resolveExercise(exerciseId, BUILT_IN, BUILT_IN_MODIFIERS).name,
   sets: Array.from({ length: sets }, () => ({ repsMin: reps, repsMax: reps })),
 })
 
 const SEED_ROUTINES: { name: string; exercises: RoutineExercise[] }[] = [
-  { name: 'Push', exercises: [seedEx('bench-press', 4, 8), seedEx('overhead-press', 3, 8), seedEx('incline-dumbbell-press', 3, 10), seedEx('tricep-pushdown', 3, 12)] },
-  { name: 'Pull', exercises: [seedEx('deadlift', 3, 5), seedEx('pull-up', 3, 8), seedEx('barbell-row', 3, 8), seedEx('barbell-curl', 3, 12)] },
-  { name: 'Legs', exercises: [seedEx('back-squat', 4, 6), seedEx('romanian-deadlift', 3, 10), seedEx('leg-press', 3, 12), seedEx('standing-calf-raise', 4, 15)] },
+  { name: 'Push', exercises: [seedEx('bench-press', 4, 8), seedEx('overhead-press', 3, 8), seedEx('incline-bench-press~dumbbell', 3, 10), seedEx('tricep-pushdown', 3, 12)] },
+  { name: 'Pull', exercises: [seedEx('deadlift', 3, 5), seedEx('pull-up', 3, 8), seedEx('row', 3, 8), seedEx('curl', 3, 12)] },
+  { name: 'Legs', exercises: [seedEx('back-squat', 4, 6), seedEx('romanian-deadlift', 3, 10), seedEx('leg-press', 3, 12), seedEx('calf-raise~standing', 4, 15)] },
 ]
 
 const DEFAULT_SETTINGS = { unit: 'kg' as const, weeklyGoal: 4, effort: 'rir' as const, activePlanId: null }
@@ -172,6 +174,7 @@ let state: State = {
   plans: [],
   routines: [],
   exercises: BUILT_IN,
+  modifiers: BUILT_IN_MODIFIERS,
   sessions: [],
   slots: [],
   devices: [],
@@ -207,10 +210,13 @@ const fail = (e: unknown) => {
 // ponytail: every path lives here; Sisu only ever writes under users/{uid}/apps/gym
 
 const gymRef = (uid: string) => doc(db, 'users', uid, 'apps', 'gym')
-const col = (uid: string, name: 'plans' | 'routines' | 'exercises' | 'sessions' | 'slots' | 'devices') => collection(db, 'users', uid, 'apps', 'gym', name)
+const col = (uid: string, name: 'plans' | 'routines' | 'exercises' | 'modifiers' | 'sessions' | 'slots' | 'devices') => collection(db, 'users', uid, 'apps', 'gym', name)
 const me = () => state.user?.uid ?? '' // actions are only reachable after sign-in
 
 const ms = (t: unknown) => (t instanceof Timestamp ? t.toMillis() : null)
+
+/** Any exercise id — plain, from before the re-cut, or a variant — as something displayable. */
+export const resolve = (id: string) => resolveExercise(id, state.exercises, state.modifiers)
 
 /* ---------- reading documents written before exercises had ids ---------- */
 
@@ -220,11 +226,11 @@ const idForName = (name: string) => BUILT_IN.find((x) => x.name.toLowerCase() ==
 type LegacyRoutineExercise = { name: string; sets: number; reps: number }
 const readRoutineExercise = (e: RoutineExercise | LegacyRoutineExercise): RoutineExercise =>
   Array.isArray(e.sets)
-    ? { exerciseId: (e as RoutineExercise).exerciseId ?? idForName(e.name), name: e.name, sets: e.sets }
-    : { exerciseId: idForName(e.name), name: e.name, sets: Array.from({ length: (e as LegacyRoutineExercise).sets || 3 }, () => ({ repsMin: (e as LegacyRoutineExercise).reps || 10, repsMax: (e as LegacyRoutineExercise).reps || 10 })) }
+    ? { exerciseId: canonicalExerciseId((e as RoutineExercise).exerciseId ?? idForName(e.name)), name: e.name, sets: e.sets }
+    : { exerciseId: canonicalExerciseId(idForName(e.name)), name: e.name, sets: Array.from({ length: (e as LegacyRoutineExercise).sets || 3 }, () => ({ repsMin: (e as LegacyRoutineExercise).reps || 10, repsMax: (e as LegacyRoutineExercise).reps || 10 })) }
 
 const readLoggedExercise = (e: { exerciseId?: string; name: string; sets: SetLog[] }): ExerciseLog => ({
-  exerciseId: e.exerciseId ?? idForName(e.name),
+  exerciseId: canonicalExerciseId(e.exerciseId ?? idForName(e.name)),
   name: e.name,
   sets: e.sets ?? [],
 })
@@ -260,6 +266,7 @@ onAuthStateChanged(auth, (user) => {
     plans: [],
     routines: [],
     exercises: BUILT_IN,
+    modifiers: BUILT_IN_MODIFIERS,
     sessions: [],
     slots: [],
     devices: [],
@@ -350,6 +357,11 @@ function listen(user: User) {
           .sort((a, b) => b.at - a.at),
       })
       track('sessions', pendingDocs(snap), snap.metadata.fromCache)
+    }),
+    onSnapshot(col(uid, 'modifiers'), meta, (snap: QuerySnapshot) => {
+      const custom: Modifier[] = snap.docs.map((d) => ({ id: d.id, label: d.get('label'), group: 'custom', custom: true }))
+      set({ modifiers: [...BUILT_IN_MODIFIERS, ...custom] })
+      track('modifiers', pendingDocs(snap), snap.metadata.fromCache)
     }),
     onSnapshot(col(uid, 'exercises'), meta, (snap: QuerySnapshot) => {
       const custom: Exercise[] = snap.docs.map((d) => ({
@@ -636,9 +648,9 @@ export function removeDevice(id: string) {
   deleteDoc(doc(col(me(), 'devices'), id)).catch(fail)
 }
 
-/** main muscles of the exercises involved; secondaries deliberately don't count */
+/** main muscles of the exercises involved; a variant counts towards its base's muscle */
 const musclesOf = (exercises: { exerciseId: string }[]): MuscleId[] => [
-  ...new Set(exercises.map((e) => state.exercises.find((x) => x.id === e.exerciseId)?.muscle).filter((m): m is MuscleId => !!m)),
+  ...new Set(exercises.map((e) => resolve(e.exerciseId).base.muscle)),
 ]
 
 // new accounts start empty; the user opts in (auto-seeding would race the schedule app's migration)
@@ -683,6 +695,17 @@ export const setActivePlan = (id: string | null) => setSettings({ activePlanId: 
 /** Custom exercises only: the built-ins live in code and are the same for everyone. */
 export function saveExercise(e: Omit<Exercise, 'custom'>) {
   setDoc(doc(col(me(), 'exercises'), e.id), { name: e.name.trim(), muscle: e.muscle, secondary: e.secondary, description: e.description?.trim() || null }, { merge: true }).catch(fail)
+  heartbeat()
+}
+
+/** The user's own modifiers. They can't change the muscle either, and they read in brackets. */
+export function saveModifier(id: string, label: string) {
+  setDoc(doc(col(me(), 'modifiers'), id), { label: label.trim() }, { merge: true }).catch(fail)
+  heartbeat()
+}
+
+export function deleteModifier(id: string) {
+  deleteDoc(doc(col(me(), 'modifiers'), id)).catch(fail)
   heartbeat()
 }
 

@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowDown, ArrowUp, ChevronLeft, Copy, Plus, Search, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronLeft, Copy, Plus, Trash2, X } from 'lucide-react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { deleteRoutine, MUSCLES, newId, saveRoutine, useStore, type RepTarget, type Routine, type RoutineExercise } from '../store'
-import { blankExercise, ExerciseForm, type ExerciseDraft } from '../exerciseForm'
-import { btn, Sheet, spring, Tap } from '../ui'
+import { deleteRoutine, MUSCLES, newId, resolve, saveRoutine, useStore, type RepTarget, type Routine, type RoutineExercise } from '../store'
+import { ExercisePicker } from '../exercisePicker'
+import { btn, spring, Tap } from '../ui'
 
 const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent'
 const num = 'w-14 rounded-lg bg-ink py-1.5 text-center font-display font-semibold tabular-nums outline-none focus:ring-2 focus:ring-accent'
@@ -20,19 +20,16 @@ export default function RoutineEditor() {
   const { id } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { routines, plans, exercises, profile } = useStore()
+  const { routines, plans, profile } = useStore()
 
   const existing = routines.find((r) => r.id === id)
   const [draft, setDraft] = useState<Routine>(
     existing ?? { id: newId(), name: '', planId: params.get('plan') ?? profile.activePlanId, muscles: [], exercises: [] },
   )
   const [picking, setPicking] = useState(false)
-  const [query, setQuery] = useState('')
-  const [newExercise, setNewExercise] = useState<ExerciseDraft | null>(null)
 
   const set = (patch: Partial<Routine>) => setDraft({ ...draft, ...patch })
-  const setExercise = (i: number, patch: Partial<RoutineExercise>) =>
-    set({ exercises: draft.exercises.map((e, j) => (i === j ? { ...e, ...patch } : e)) })
+  const setExercise = (i: number, patch: Partial<RoutineExercise>) => set({ exercises: draft.exercises.map((e, j) => (i === j ? { ...e, ...patch } : e)) })
   const setTarget = (ei: number, si: number, patch: Partial<RepTarget>) =>
     setExercise(ei, { sets: draft.exercises[ei].sets.map((t, j) => (j === si ? { ...t, ...patch } : t)) })
 
@@ -45,14 +42,13 @@ export default function RoutineEditor() {
     setExercise(ei, { sets: draft.exercises[ei].sets.map(() => first) })
   }
 
-  const q = query.trim().toLowerCase()
-  const options = exercises.filter((e) => !q || e.name.toLowerCase().includes(q) || MUSCLES[e.muscle].toLowerCase().includes(q))
-
-  const addToRoutine = (exerciseId: string, name: string) => {
-    set({ exercises: [...draft.exercises, { exerciseId, name, sets: [{ repsMin: 8, repsMax: 10 }, { repsMin: 8, repsMax: 10 }, { repsMin: 8, repsMax: 10 }] }] })
-    setPicking(false)
-    setQuery('')
-  }
+  const addPicks = (picks: { exerciseId: string; name: string }[]) =>
+    set({
+      exercises: [
+        ...draft.exercises,
+        ...picks.map((p) => ({ exerciseId: p.exerciseId, name: p.name, sets: [{ repsMin: 8, repsMax: 10 }, { repsMin: 8, repsMax: 10 }, { repsMin: 8, repsMax: 10 }] })),
+      ],
+    })
 
   const save = () => {
     saveRoutine({ ...draft, name: draft.name.trim() })
@@ -97,7 +93,7 @@ export default function RoutineEditor() {
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-display text-lg font-semibold">{e.name}</p>
-                  <p className="text-xs text-zinc-500">{MUSCLES[exercises.find((x) => x.id === e.exerciseId)?.muscle ?? 'chest']}</p>
+                  <p className="text-xs text-muted">{MUSCLES[resolve(e.exerciseId).base.muscle]}</p>
                 </div>
                 <Tap onClick={() => set({ exercises: move(draft.exercises, ei, ei - 1) })} aria-label="Move up" className="grid size-8 place-items-center rounded-full bg-surface-2 text-zinc-400">
                   <ArrowUp size={14} />
@@ -198,39 +194,7 @@ export default function RoutineEditor() {
         </div>
       </div>
 
-      <Sheet open={picking} onClose={() => setPicking(false)} title="Add exercise">
-        <div className="space-y-3 pb-4">
-          <div className="relative">
-            <Search size={16} className="absolute top-1/2 left-4 -translate-y-1/2 text-zinc-500" />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" className={`${field} pl-11`} autoFocus />
-          </div>
-          <div className="space-y-1">
-            {options.slice(0, 40).map((x) => (
-              <Tap key={x.id} onClick={() => addToRoutine(x.id, x.name)} className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left">
-                <span>
-                  {x.name}
-                  <span className="ml-2 text-xs text-zinc-500">{MUSCLES[x.muscle]}</span>
-                </span>
-                <Plus size={16} className="text-zinc-500" />
-              </Tap>
-            ))}
-            <Tap
-              onClick={() => {
-                setPicking(false)
-                setNewExercise(blankExercise(query.trim()))
-              }}
-              className="flex w-full items-center justify-between rounded-2xl bg-surface-2 px-4 py-3 text-left"
-            >
-              <span>{query.trim() ? `New: ${query.trim()}` : 'New exercise'}</span>
-              <Plus size={16} className="text-muted" />
-            </Tap>
-          </div>
-        </div>
-      </Sheet>
-
-      <Sheet open={!!newExercise} onClose={() => setNewExercise(null)} title="New exercise">
-        {newExercise && <ExerciseForm draft={newExercise} setDraft={setNewExercise} onSaved={(e) => addToRoutine(e.id, e.name)} />}
-      </Sheet>
+      <ExercisePicker open={picking} onClose={() => setPicking(false)} onAdd={addPicks} />
     </motion.main>
   )
 }

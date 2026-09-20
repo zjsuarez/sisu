@@ -135,43 +135,82 @@ log('  save:', await phone.ev(click('Save routine')))
 await sleep(2500)
 const pushAfter = (await listDocs('routines')).find((d) => plain(d).name === 'Push')
 check('editing a routine saves the new set', JSON.stringify(pushAfter).split('repsMin').length - 1 === setsBefore + 1, `${setsBefore} -> ${JSON.stringify(pushAfter).split('repsMin').length - 1}`)
-// create an exercise without leaving the routine: picker -> "New: ..." -> form -> straight in
+// create an exercise without leaving the routine, and give another one a modifier
 await phone.ev(`location.hash = '#/routine/${pushId}'`)
 await sleep(1500)
 await phone.ev(click('Add exercise'))
 await sleep(1200)
-await phone.ev(`(() => {
-  const dialog = document.querySelector('[role="dialog"]')
-  const input = dialog.querySelector('input[placeholder="Search"]')
-  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, 'Sled Push')
-  input.dispatchEvent(new Event('input', { bubbles: true }))
-})()`)
-await sleep(600)
+
+// the picker's last sheet wins: the modifier sheet opens on top of it
+const dialogEval = (body) => `(() => {
+  const d = [...document.querySelectorAll('[role="dialog"]')].at(-1)
+  if (!d) return 'NO DIALOG'
+  ${body}
+})()`
 const dialogClick = (text) =>
-  `(() => {
-  const dialog = document.querySelector('[role="dialog"]')
-  if (!dialog) return 'NO DIALOG'
-  const b = [...dialog.querySelectorAll('button')].find((x) => x.textContent.trim() === ` +
-  JSON.stringify(text) +
-  `)
+  dialogEval(`const b = [...d.querySelectorAll('button')].find((x) => x.textContent.trim() === ` + JSON.stringify(text) + `)
   if (!b) return 'NOT FOUND'
   b.click()
-  return 'clicked'
+  return 'clicked'`)
+const dialogClickStarts = (text) =>
+  dialogEval(`const b = [...d.querySelectorAll('button')].find((x) => x.textContent.trim().startsWith(` + JSON.stringify(text) + `))
+  if (!b) return 'NOT FOUND'
+  b.click()
+  return 'clicked'`)
+const closeSheet = () => `(() => {
+  const backs = [...document.querySelectorAll('.fixed.inset-0.z-40')]
+  backs.at(-1)?.click()
+  return backs.length
 })()`
+
+// 1. a brand new exercise, created from the picker
+await phone.ev(
+  dialogEval(`const input = d.querySelector('input[placeholder="Search"]')
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, 'Sled Push')
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  return input.value`),
+)
+await sleep(600)
 log('  new:', await phone.ev(dialogClick('New: Sled Push')))
 await sleep(1200)
 log('  muscle:', await phone.ev(dialogClick('Quads')))
 await sleep(400)
-log('  add:', await phone.ev(dialogClick('Add exercise')))
-await sleep(1500)
+log('  save exercise:', await phone.ev(dialogClick('Add exercise')))
+await sleep(1200)
+
+// 2. an existing one with a modifier on it
+await phone.ev(
+  dialogEval(`const input = d.querySelector('input[placeholder="Search"]')
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, 'Lateral Raise')
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  return input.value`),
+)
+await sleep(600)
+log('  pick:', await phone.ev(dialogClickStarts('Lateral Raise')))
+await sleep(600)
+log('  gear:', await phone.ev(dialogEval(`const b = d.querySelector('[aria-label="Modifiers for Lateral Raise"]'); if (!b) return 'NOT FOUND'; b.click(); return 'clicked'`)))
+await sleep(1000)
+log('  modifier:', await phone.ev(dialogClick('Cable')))
+await sleep(600)
+await phone.shot('e2e-modifiers')
+await phone.ev(closeSheet())
+await sleep(800)
+
+const pickerBody = await phone.ev(body)
+check('a modifier renames the pick before you add it', /Cable Lateral Raise/.test(pickerBody))
+
+log('  commit:', await phone.ev(dialogClick('Add 2 exercises')))
+await sleep(1200)
 const withNew = await phone.ev(body)
-check('a new exercise goes straight into the routine', /Sled Push/.test(withNew))
+check('both picks land in the routine', /Sled Push/.test(withNew) && /Cable Lateral Raise/.test(withNew))
 log('  save:', await phone.ev(click('Save routine')))
 await sleep(2500)
+
 const customs = (await listDocs('exercises')).map(plain)
-check('and it is saved to the library', customs.some((e) => e.name === 'Sled Push' && e.muscle === 'quads'), JSON.stringify(customs.map((e) => e.name)))
+check('the new exercise is saved to the library', customs.some((e) => e.name === 'Sled Push' && e.muscle === 'quads'), JSON.stringify(customs.map((e) => e.name)))
 const pushWithNew = (await listDocs('routines')).find((d) => plain(d).name === 'Push')
-check('the routine keeps it after saving', JSON.stringify(pushWithNew).includes('Sled Push'))
+check('the routine keeps both after saving', JSON.stringify(pushWithNew).includes('Sled Push') && JSON.stringify(pushWithNew).includes('Cable Lateral Raise'))
+check('the modifier is in the exercise id, not a second record', JSON.stringify(pushWithNew).includes('lateral-raise~cable'))
 
 // ---------------------------------------------------------------- exercise library
 await phone.ev("location.hash = '#/exercises'")
