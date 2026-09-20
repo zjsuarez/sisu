@@ -316,6 +316,17 @@ check('device registered with a last-synced time', devices.some((d) => d.type ==
 const onlineBody = await phone.ev(body)
 check('badge shows synced', /Synced/.test(onlineBody), onlineBody.split('\n').find((l) => /waiting|Offline|Synced/i.test(l)))
 
+// ---------------------------------------------------------------- the plan screen counts it
+await phone.ev(`location.hash = '#/plan/${planId}'`)
+await sleep(2000)
+const planBody = await phone.ev(body)
+check('the plan screen counts the workout that was logged', /1\s*Workout/.test(planBody), planBody.slice(0, 120))
+check('and shows when the plan started', /Started/.test(planBody))
+await phone.shot('e2e-plan')
+await phone.ev("location.hash = '#/workouts'")
+await sleep(1500)
+await phone.shot('e2e-workouts-list')
+
 // ---------------------------------------------------------------- second device (desktop)
 const desktop = await launch(9502, 'desktop')
 await desktop.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false })

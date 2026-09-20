@@ -7,6 +7,7 @@ import Today from './pages/Today'
 import Workouts from './pages/Workouts'
 import Exercises from './pages/Exercises'
 import RoutineEditor from './pages/Routine'
+import PlanScreen from './pages/Plan'
 import Session from './pages/Session'
 import Progress from './pages/Progress'
 import Profile from './pages/Profile'
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/" element={<Today />} />
           <Route path="/workouts" element={<Workouts />} />
           <Route path="/exercises" element={<Exercises />} />
+          <Route path="/plan/:id" element={<PlanScreen />} />
           <Route path="/routine/:id" element={<RoutineEditor />} />
           <Route path="/session" element={<Session />} />
           <Route path="/progress" element={<Progress />} />

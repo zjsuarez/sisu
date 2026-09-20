@@ -34,13 +34,14 @@ export type Routine = { id: string; name: string; planId: string | null; muscles
 export type WeekdayId = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 export type WeeklySchedule = Record<WeekdayId, string | null>
 /** A plan is a name, its routines, and either a weekly pattern or nothing at all. */
-export type Plan = { id: string; name: string; routineIds: string[]; schedule: WeeklySchedule | null; defaultStart: string | null; defaultMinutes: number | null }
+export type Plan = { id: string; name: string; routineIds: string[]; schedule: WeeklySchedule | null; defaultStart: string | null; defaultMinutes: number | null; createdAt: number }
 export type Session = {
   id: string
   date: string // 'YYYY-MM-DD' local
   start: string // 'HH:MM' local
   end: string
   routineId: string | null
+  planId: string | null
   title: string
   muscles: MuscleId[]
   exercises: ExerciseLog[]
@@ -314,6 +315,7 @@ function listen(user: User) {
             schedule: d.get('schedule') ?? null,
             defaultStart: d.get('defaultStart') ?? null,
             defaultMinutes: d.get('defaultMinutes') ?? null,
+            createdAt: ms(d.get('createdAt')) ?? Date.now(),
           })),
       })
       track('plans', pendingDocs(snap), snap.metadata.fromCache)
@@ -345,6 +347,7 @@ function listen(user: User) {
               start: x.start,
               end: x.end,
               routineId: x.routineId ?? null,
+              planId: x.planId ?? null,
               title: x.title,
               muscles: x.muscles ?? [],
               exercises: (x.exercises ?? []).map(readLoggedExercise),
@@ -439,6 +442,7 @@ function uploadLegacy(uid: string) {
         start: hm(start),
         end: hm(s.date),
         routineId: null,
+        planId: null,
         title: s.routine,
         muscles: [],
         exercises: s.exercises.map((e) => ({ exerciseId: idForName(e.name), name: e.name, sets: e.sets.filter((x) => x.done !== false).map(({ weight, reps }) => ({ weight, reps })) })),

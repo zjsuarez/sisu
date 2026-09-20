@@ -133,4 +133,6 @@ export const fmtAgo = (t: number) => {
 }
 
 export const fmtDay = (t: number) => new Date(t).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+/** short enough to sit in a stat column without wrapping */
+export const fmtShortDay = (t: number) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 export const fmtTime = (t: number) => new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
