@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { ChevronLeft, Pencil, Plus, Star } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { setActivePlan, startSession, useStore, type Routine } from '../store'
-import { PlanEditor, planStats, RoutineRow } from '../plans'
-import { Block, btn, fmtShortDay, Page, Sheet, Tap } from '../ui'
+import { PlanEditor, planStats, planSummary, RoutineRow } from '../plans'
+import { Block, btn, Page, Sheet, Tap } from '../ui'
 
 export default function PlanScreen() {
   const { id } = useParams()
@@ -30,9 +30,12 @@ export default function PlanScreen() {
   return (
     <Page
       subtitle={
-        <Tap onClick={() => navigate('/workouts')} className="flex items-center gap-1 text-muted">
-          <ChevronLeft size={16} /> Workouts
-        </Tap>
+        <>
+          <Tap onClick={() => navigate('/workouts')} className="flex items-center gap-1 text-muted">
+            <ChevronLeft size={16} /> Workouts
+          </Tap>
+          <span className="text-muted">· {planSummary(st)}</span>
+        </>
       }
       title={plan.name}
       action={
@@ -41,19 +44,6 @@ export default function PlanScreen() {
         </Tap>
       }
     >
-      <Block className="card grid grid-cols-3 divide-x divide-line p-5">
-        {[
-          { label: 'Routines', value: String(st.routines) },
-          { label: 'Workouts', value: String(st.workouts) },
-          { label: st.startedAt ? 'Started' : 'Created', value: fmtShortDay(st.startedAt ?? st.createdAt) },
-        ].map((x) => (
-          <div key={x.label} className="px-2 text-center first:pl-0 last:pr-0">
-            <p className="font-display text-xl font-bold">{x.value}</p>
-            <p className="text-xs text-muted">{x.label}</p>
-          </div>
-        ))}
-      </Block>
-
       {!isActive && (
         <Block>
           <Tap onClick={() => setActivePlan(plan.id)} className={`${btn.ghost} flex w-full items-center justify-center gap-2`}>

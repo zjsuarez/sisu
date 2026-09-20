@@ -3,8 +3,8 @@ import { motion } from 'motion/react'
 import { ChevronRight, Dumbbell, Plus, Star } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { newId, seedStarterPlan, startSession, useStore, type Plan, type Routine } from '../store'
-import { PlanEditor, planStats, RoutineRow } from '../plans'
-import { Block, btn, fmtShortDay, Page, Sheet, Tap } from '../ui'
+import { PlanEditor, planStats, planSummary, RoutineRow } from '../plans'
+import { Block, btn, Page, Sheet, Tap } from '../ui'
 
 const blankPlan = (): Plan => ({ id: newId(), name: '', routineIds: [], schedule: null, defaultStart: null, defaultMinutes: null, createdAt: Date.now() })
 
@@ -50,24 +50,15 @@ export default function Workouts() {
         const st = planStats(plan, routines, sessions)
         return (
           <Block key={plan.id}>
-            <motion.button whileTap={{ scale: 0.99 }} onClick={() => navigate(`/plan/${plan.id}`)} className="card w-full p-5 text-left">
-              <div className="flex items-center gap-2">
-                {plan.id === profile.activePlanId && <Star size={14} className="shrink-0 text-white" fill="currentColor" />}
-                <h2 className="min-w-0 flex-1 truncate font-display text-2xl font-bold">{plan.name}</h2>
-                <ChevronRight size={20} className="shrink-0 text-muted" />
+            <motion.button whileTap={{ scale: 0.99 }} onClick={() => navigate(`/plan/${plan.id}`)} className="card flex w-full items-center gap-2 p-5 text-left">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  {plan.id === profile.activePlanId && <Star size={13} className="shrink-0 text-white" fill="currentColor" />}
+                  <h2 className="truncate font-display text-2xl font-bold">{plan.name}</h2>
+                </div>
+                <p className="truncate text-sm text-muted">{planSummary(st)}</p>
               </div>
-              <div className="mt-4 grid grid-cols-3 divide-x divide-line">
-                {[
-                  { label: `Routine${st.routines === 1 ? '' : 's'}`, value: String(st.routines) },
-                  { label: `Workout${st.workouts === 1 ? '' : 's'}`, value: String(st.workouts) },
-                  { label: st.startedAt ? 'Started' : 'Created', value: fmtShortDay(st.startedAt ?? st.createdAt) },
-                ].map((x) => (
-                  <div key={x.label} className="px-2 text-center first:pl-0 last:pr-0">
-                    <p className="font-display text-xl font-bold">{x.value}</p>
-                    <p className="text-xs text-muted">{x.label}</p>
-                  </div>
-                ))}
-              </div>
+              <ChevronRight size={20} className="shrink-0 text-muted" />
             </motion.button>
           </Block>
         )

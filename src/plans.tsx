@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Check, Play, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { deletePlan, savePlan, setActivePlan, useStore, type Plan, type Routine, type Session } from './store'
-import { btn, Tap } from './ui'
+import { btn, fmtShortDay, Tap } from './ui'
 
 const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent'
 
@@ -17,6 +17,12 @@ export function planStats(plan: Plan, routines: Routine[], sessions: Session[]) 
     startedAt: mine.length ? Math.min(...mine.map((s) => s.at)) : null,
     createdAt: plan.createdAt,
   }
+}
+
+/** "1 routine · 0 workouts · Sep 19" */
+export function planSummary(st: ReturnType<typeof planStats>) {
+  const n = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
+  return `${n(st.routines, 'routine')} · ${n(st.workouts, 'workout')} · ${fmtShortDay(st.startedAt ?? st.createdAt)}`
 }
 
 export function RoutineRow({ routine, onStart }: { routine: Routine; onStart: (r: Routine) => void }) {
