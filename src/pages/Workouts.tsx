@@ -76,12 +76,6 @@ export default function Workouts() {
       )}
 
       <Block>
-        <Tap onClick={() => navigate('/routine/new')} className={`${btn.ghost} flex w-full items-center justify-center gap-2`}>
-          <Plus size={18} /> New routine
-        </Tap>
-      </Block>
-
-      <Block>
         <Tap onClick={() => navigate('/exercises')} className="card flex w-full items-center gap-3 p-4 text-left">
           <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-surface-2 text-zinc-300">
             <Dumbbell size={18} />
