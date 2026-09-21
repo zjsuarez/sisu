@@ -1,5 +1,5 @@
 /** Calendar maths: grids, heatmap shading, and the weekly pattern's day list. No Firebase, no DOM. */
-import { addDays, addMinutes, dayValues, levelOf, monthGrid, monthsAround, scale, weekdayOf, yearColumns, ymd } from '../src/calendar.ts'
+import { addDays, addMinutes, dayValues, durationSec, levelOf, monthGrid, monthsAround, scale, weekdayOf, yearColumns, ymd } from '../src/calendar.ts'
 import type { Session } from '../src/store.ts'
 
 let failed = 0
@@ -16,6 +16,11 @@ check('weekdayOf knows 2026-09-21 is a Monday', weekdayOf('2026-09-21') === 'mon
 check('weekdayOf knows the Sunday before it', weekdayOf('2026-09-20') === 'sun', weekdayOf('2026-09-20'))
 check('addMinutes rolls past midnight', addMinutes('23:30', 75) === '00:45', addMinutes('23:30', 75))
 check('ymd is local, not UTC', ymd(new Date(2026, 8, 21, 23, 30).getTime()) === '2026-09-21')
+
+/* how long a workout lasted */
+check('a workout from 18:00 to 19:15 lasted 75 minutes', durationSec('18:00', '19:15') === 75 * 60, durationSec('18:00', '19:15'))
+check('one that ran past midnight still has a length', durationSec('23:30', '00:45') === 75 * 60, durationSec('23:30', '00:45'))
+check('start and end in the same minute is zero, not a day', durationSec('18:00', '18:00') === 0, durationSec('18:00', '18:00'))
 
 /* month grid */
 const sep = monthGrid(2026, 9) // September 2026 starts on a Tuesday

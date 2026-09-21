@@ -36,6 +36,9 @@ export const addMinutes = (time: string, mins: number) => {
   return `${pad(Math.floor(t / 60))}:${pad(t % 60)}`
 }
 
+/** seconds between two 'HH:MM' times; end before start means it ran past midnight */
+export const durationSec = (start: string, end: string) => ((((toMin(end) - toMin(start)) % 1440) + 1440) % 1440) * 60
+
 export const volume = (exercises: { sets: { weight: number; reps: number; done?: boolean }[] }[]) =>
   exercises.reduce((t, e) => t + e.sets.reduce((s, x) => s + (x.done !== false ? x.weight * x.reps : 0), 0), 0)
 

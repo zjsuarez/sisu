@@ -6,6 +6,7 @@ import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, la
 import { ExercisePicker } from '../exercisePicker'
 import { btn, fmtCompact, fmtDuration, spring, Tap, useNow } from '../ui'
 import { ask, askText } from '../dialog'
+import { NO_CHRONO, setChrono } from '../store'
 import { effortLabel, NumInput } from '../sets'
 import Zen from './Zen'
 
@@ -33,7 +34,6 @@ export default function Session() {
   const [picking, setPicking] = useState(false)
   // zen mode sticks: if you train that way, every workout opens that way
   const [zen, setZen] = useState(() => localStorage.getItem(ZEN_KEY) === '1')
-  const [chrono, setChrono] = useState({ base: 0, startedAt: null as number | null })
   const showZen = (on: boolean) => {
     setZen(on)
     localStorage.setItem(ZEN_KEY, on ? '1' : '0')
@@ -85,7 +85,7 @@ export default function Session() {
   }
 
   if (zen && active.exercises.length)
-    return <Zen active={active} now={now} chrono={chrono} setChrono={setChrono} onExit={() => showZen(false)} onAdd={() => setPicking(true)} />
+    return <Zen active={active} now={now} chrono={active.chrono ?? NO_CHRONO} setChrono={setChrono} onExit={() => showZen(false)} onAdd={() => setPicking(true)} />
 
   return (
     <motion.main initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} transition={spring} className="mx-auto min-h-full max-w-md pb-40">

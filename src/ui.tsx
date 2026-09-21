@@ -121,8 +121,14 @@ export function useNow(on = true) {
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
     if (!on) return
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
+    const tick = () => setNow(Date.now())
+    const id = setInterval(tick, 1000)
+    // browsers throttle intervals in the background: catch up as soon as the app is looked at again
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', tick)
+    }
   }, [on])
   return now
 }

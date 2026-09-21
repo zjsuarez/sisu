@@ -2,11 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { Check, ChevronLeft, EllipsisVertical, Pause, Play, Plus, RotateCcw } from 'lucide-react'
-import { addSet, editSet, exerciseHistory, fromKg, lastSet, muscleLabel, repLabel, resolve, toKg, useStore, type Active } from '../store'
+import { addSet, editSet, exerciseHistory, fromKg, lastSet, muscleLabel, repLabel, resolve, toKg, useStore, type Active, type Chrono } from '../store'
 import { effortLabel, NumInput, setText } from '../sets'
 import { fmtDay, fmtDuration, Sheet, Tap } from '../ui'
-
-type Chrono = { base: number; startedAt: number | null }
 
 /**
  * One exercise, the whole screen, swipe for the next. Everything else — the workout's clock,

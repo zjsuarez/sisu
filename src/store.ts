@@ -16,7 +16,7 @@ import {
   type QuerySnapshot,
 } from 'firebase/firestore'
 import { auth, db } from './firebase'
-import { addDays, addMinutes, toMin, volume, weekdayOf, ymd } from './calendar'
+import { addDays, addMinutes, durationSec, volume, weekdayOf, ymd } from './calendar'
 
 import { BUILT_IN, BUILT_IN_MODIFIERS, canonicalExerciseId, resolveExercise, type Exercise, type Modifier, type MuscleId } from './exercises'
 
@@ -24,7 +24,7 @@ import { BUILT_IN, BUILT_IN_MODIFIERS, canonicalExerciseId, resolveExercise, typ
 
 export { MUSCLES, MUSCLE_IDS, muscleLabel, MODIFIER_GROUPS, BUILT_IN_MODIFIERS, buildExerciseId, splitExerciseId, variantName } from './exercises'
 export type { Exercise, Modifier, ModifierGroup, MuscleId, ResolvedExercise } from './exercises'
-export { addDays, addMinutes, volume, weekdayOf, ymd }
+export { addDays, addMinutes, durationSec, volume, weekdayOf, ymd }
 
 /** effort is stored with its kind, never a bare number: switching the setting must not reinterpret history */
 export type SetLog = { weight: number; reps: number; rir?: number; rpe?: number; done?: boolean }
@@ -76,7 +76,17 @@ export type Slot = {
   at: number // derived: local ms of date + start (midnight when untimed)
 }
 export type ActiveExercise = ExerciseLog & { targets: RepTarget[] }
-export type Active = { routineId: string; routine: string; muscles: MuscleId[]; startedAt: number; exercises: ActiveExercise[]; slotId: string | null }
+/** a stopwatch as two numbers: what it had banked, and when it last started running */
+export type Chrono = { base: number; startedAt: number | null }
+export type Active = {
+  routineId: string
+  routine: string
+  muscles: MuscleId[]
+  startedAt: number
+  exercises: ActiveExercise[]
+  slotId: string | null
+  chrono: Chrono // kept with the workout, so closing the app does not zero it
+}
 export type Effort = 'rir' | 'rpe' | 'none'
 /** what the year grid shades by */
 export type Heatmap = 'time' | 'sets' | 'volume' | 'plain'
@@ -143,9 +153,6 @@ const toMs = (date: string, time: string) => {
   const [h, min] = time.split(':').map(Number)
   return new Date(y, m - 1, d, h, min).getTime()
 }
-// end < start crosses midnight
-const durationSec = (start: string, end: string) => (((toMin(end) - toMin(start)) % 1440) + 1440) % 1440 * 60
-
 /* ---------- this device ---------- */
 
 const ACTIVE_KEY = 'sisu.active'
@@ -526,6 +533,7 @@ export const startSession = (r: Routine, slotId: string | null = null) =>
     muscles: r.muscles,
     slotId,
     startedAt: Date.now(),
+    chrono: { base: 0, startedAt: null },
     exercises: r.exercises.map((e) => {
       const targets = e.sets.length ? e.sets : [{ repsMin: 10, repsMax: 10 }]
       // empty, never pre-filled: a set you tick must hold what you actually lifted
@@ -534,6 +542,9 @@ export const startSession = (r: Routine, slotId: string | null = null) =>
   })
 
 const editActive = (fn: (a: Active) => Active) => state.active && setActive(fn(state.active))
+
+export const NO_CHRONO: Chrono = { base: 0, startedAt: null }
+export const setChrono = (chrono: Chrono) => editActive((a) => ({ ...a, chrono }))
 
 export const editSet = (ei: number, si: number, patch: Partial<SetLog>) =>
   editActive((a) => ({
