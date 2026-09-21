@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, EllipsisVertical, Pause, Play, Plus, RotateCcw } from 'lucide-react'
-import { addSet, editSet, exerciseHistory, fromKg, lastSet, moveExercise, muscleLabel, repLabel, resolve, toKg, useStore, type Active, type Chrono } from '../store'
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, EllipsisVertical, Plus } from 'lucide-react'
+import { addSet, editSet, exerciseHistory, fromKg, lastSet, moveExercise, muscleLabel, NO_CHRONO, repLabel, resolve, toKg, useStore, type Active } from '../store'
 import { effortLabel, NumInput, setText } from '../sets'
-import { fmtDay, fmtDuration, Sheet, Tap } from '../ui'
+import { Chronometer } from '../chrono'
+import { fmtDay, Sheet, Tap } from '../ui'
 
 /**
  * One exercise, the whole screen, swipe for the next. Everything else — the workout's clock,
@@ -13,27 +14,32 @@ import { fmtDay, fmtDuration, Sheet, Tap } from '../ui'
 export default function Zen({
   active,
   now,
-  chrono,
-  setChrono,
+  at,
+  setAt,
   onExit,
   onAdd,
 }: {
   active: Active
   now: number
-  chrono: Chrono
-  setChrono: (c: Chrono) => void
+  at: number
+  setAt: (i: number) => void
   onExit: () => void
   onAdd: () => void
 }) {
   const { profile } = useStore()
   const navigate = useNavigate()
   const scroller = useRef<HTMLDivElement>(null)
-  const [at, setAt] = useState(0)
   const [sheet, setSheet] = useState<null | 'menu' | 'history' | 'about'>(null)
 
-  const i = Math.min(at, active.exercises.length - 1)
+  const i = Math.min(Math.max(at, 0), active.exercises.length - 1)
   const e = active.exercises[i]
-  const elapsed = Math.round((chrono.base + (chrono.startedAt ? now - chrono.startedAt : 0)) / 1000)
+
+  // open where the workout actually is, not back at the first exercise
+  useLayoutEffect(() => {
+    const el = scroller.current
+    if (el) el.scrollLeft = i * el.clientWidth
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // the scroll container is the source of truth for which exercise you are on
   const onScroll = () => {
@@ -77,19 +83,8 @@ export default function Zen({
         ))}
       </div>
 
-      {/* chronometer: yours to start, counts up, never nags */}
-      <div className="safe-bottom flex shrink-0 items-center justify-center gap-6 px-6 pt-2 pb-4">
-        <p className="font-display text-5xl font-bold tabular-nums">{fmtDuration(elapsed)}</p>
-        <Tap
-          onClick={() => setChrono(chrono.startedAt ? { base: chrono.base + (Date.now() - chrono.startedAt), startedAt: null } : { ...chrono, startedAt: Date.now() })}
-          aria-label={chrono.startedAt ? 'Pause timer' : 'Start timer'}
-          className="grid size-12 place-items-center rounded-full bg-accent text-ink"
-        >
-          {chrono.startedAt ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
-        </Tap>
-        <Tap onClick={() => setChrono({ base: 0, startedAt: null })} aria-label="Reset timer" className="grid size-12 place-items-center rounded-full bg-surface-2 text-zinc-400">
-          <RotateCcw size={20} />
-        </Tap>
+      <div className="safe-bottom shrink-0 px-6 pt-2 pb-4">
+        <Chronometer chrono={active.chrono ?? NO_CHRONO} now={now} />
       </div>
 
       <Sheet open={!!sheet} onClose={() => setSheet(null)} title={sheet === 'history' ? 'History' : sheet === 'about' ? e.name : e.name}>

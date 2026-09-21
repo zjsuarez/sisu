@@ -1,16 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowDown, ArrowUp, Check, ChevronDown, Expand, Plus, Timer, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronDown, Expand, Plus, Trash2 } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, lastSet, moveExercise, repLabel, toKg, useStore, volume } from '../store'
 import { ExercisePicker } from '../exercisePicker'
 import { btn, fmtCompact, fmtDuration, spring, Tap, useNow } from '../ui'
 import { ask, askText } from '../dialog'
-import { NO_CHRONO, setChrono } from '../store'
+import { NO_CHRONO } from '../store'
+import { Chronometer } from '../chrono'
 import { effortLabel, NumInput } from '../sets'
 import Zen from './Zen'
 
-const REST_SEC = 90
 const ZEN_KEY = 'sisu.zen'
 
 const nowHm = () => new Date().toTimeString().slice(0, 5)
@@ -30,24 +30,23 @@ export default function Session() {
   const active = live ?? last
   const navigate = useNavigate()
   const now = useNow()
-  const [restUntil, setRestUntil] = useState<number | null>(null)
   const [picking, setPicking] = useState(false)
   // zen mode sticks: if you train that way, every workout opens that way
   const [zen, setZen] = useState(() => localStorage.getItem(ZEN_KEY) === '1')
+  const [at, setAt] = useState(0) // which exercise zen is showing
   const showZen = (on: boolean) => {
     setZen(on)
     localStorage.setItem(ZEN_KEY, on ? '1' : '0')
   }
-
-  const restLeft = restUntil ? Math.max(0, Math.ceil((restUntil - now) / 1000)) : 0
-  useEffect(() => {
-    if (!restUntil) return
-    const t = setTimeout(() => {
-      navigator.vibrate?.([200, 100, 200])
-      setRestUntil(null)
-    }, restUntil - Date.now())
-    return () => clearTimeout(t)
-  }, [restUntil])
+  const openZen = () => {
+    // stay where you were if there is still work there, otherwise jump to the first unfinished one
+    const here = active?.exercises[at]
+    if (!here?.sets.some((s) => !s.done)) {
+      const next = active?.exercises.findIndex((e) => e.sets.some((s) => !s.done)) ?? -1
+      setAt(next < 0 ? 0 : next)
+    }
+    showZen(true)
+  }
 
   if (!active) return <Navigate to="/workouts" replace />
 
@@ -56,10 +55,7 @@ export default function Session() {
 
   const cols = profile.effort === 'none' ? 'grid-cols-[2rem_1fr_1fr_3rem]' : 'grid-cols-[1.5rem_1fr_1fr_1fr_2.75rem]'
 
-  const toggle = (ei: number, si: number, wasDone: boolean) => {
-    editSet(ei, si, { done: !wasDone })
-    setRestUntil(wasDone ? null : Date.now() + REST_SEC * 1000)
-  }
+  const toggle = (ei: number, si: number, wasDone: boolean) => editSet(ei, si, { done: !wasDone })
 
   const finish = async () => {
     if (!done && !(await ask({ title: 'No sets ticked', body: 'End this workout without saving it?', confirm: 'End', danger: true }))) return
@@ -85,7 +81,7 @@ export default function Session() {
   }
 
   if (zen && active.exercises.length)
-    return <Zen active={active} now={now} chrono={active.chrono ?? NO_CHRONO} setChrono={setChrono} onExit={() => showZen(false)} onAdd={() => setPicking(true)} />
+    return <Zen active={active} now={now} at={at} setAt={setAt} onExit={() => showZen(false)} onAdd={() => setPicking(true)} />
 
   return (
     <motion.main initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} transition={spring} className="mx-auto min-h-full max-w-md pb-40">
@@ -100,7 +96,7 @@ export default function Session() {
             <p className="font-mono text-sm text-accent tabular-nums">{fmtDuration(Math.round((now - active.startedAt) / 1000))}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Tap onClick={() => showZen(true)} aria-label="Zen mode" className="grid size-10 place-items-center rounded-full bg-surface-2 text-zinc-400">
+            <Tap onClick={openZen} aria-label="Zen mode" className="grid size-10 place-items-center rounded-full bg-surface-2 text-zinc-400">
               <Expand size={17} />
             </Tap>
             <Tap onClick={finish} className="rounded-full bg-accent px-4 py-2 font-display text-sm font-semibold text-ink">
@@ -227,35 +223,11 @@ export default function Session() {
         </Tap>
       </div>
 
-      {/* rest timer */}
-      <AnimatePresence>
-        {restUntil && (
-          <motion.div
-            initial={{ y: 120, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 120, opacity: 0 }}
-            transition={spring}
-            className="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4"
-          >
-            <div className="mb-2 overflow-hidden rounded-3xl border border-line bg-surface/90 shadow-2xl shadow-black backdrop-blur-xl">
-              <div className="flex items-center gap-4 p-4">
-                <Timer className="text-accent" />
-                <div className="flex-1">
-                  <p className="text-xs text-zinc-500">Rest</p>
-                  <p className="font-display text-3xl font-bold tabular-nums">{fmtDuration(restLeft)}</p>
-                </div>
-                <Tap onClick={() => setRestUntil((t) => (t ?? Date.now()) + 15_000)} className="rounded-xl bg-surface-2 px-3 py-2 text-sm font-medium">
-                  +15s
-                </Tap>
-                <Tap onClick={() => setRestUntil(null)} className="rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-ink">
-                  Skip
-                </Tap>
-              </div>
-              <motion.div className="h-1 bg-accent" animate={{ width: `${(restLeft / REST_SEC) * 100}%` }} transition={{ ease: 'linear', duration: 1 }} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <div className="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 pb-2">
+        <div className="rounded-3xl bg-surface/90 px-5 py-3 backdrop-blur-xl">
+          <Chronometer chrono={active.chrono ?? NO_CHRONO} now={now} compact />
+        </div>
+      </div>
 
       <ExercisePicker open={picking} onClose={() => setPicking(false)} onAdd={(picks) => picks.forEach((p) => addExercise(p.exerciseId, p.name))} />
     </motion.main>
