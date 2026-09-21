@@ -102,15 +102,15 @@ export default function Calendar() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 24 }}
             transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-            className="safe-top fixed inset-0 z-20 overflow-y-auto bg-ink px-5 pb-36"
+            className="fixed inset-0 z-20 overflow-y-auto bg-ink px-5 pb-36"
           >
             <Months {...monthProps} />
             <Tap
               onClick={collapse}
               aria-label="Close calendar"
-              className="safe-top fixed top-0 right-4 z-10 mt-3 grid size-11 place-items-center rounded-full bg-surface-2 text-zinc-300"
+              className="fixed right-5 bottom-28 z-10 grid size-12 place-items-center rounded-full bg-surface-2 text-zinc-300 shadow-lg shadow-black/40"
             >
-              <X size={18} />
+              <X size={20} />
             </Tap>
           </motion.div>
         )}
@@ -222,25 +222,27 @@ type MonthProps = {
   metric: Heatmap
   label: (s: Slot) => string
   onPick: (date: string) => void
+  /** in the full-screen list the heading follows you down the month */
+  sticky?: boolean
 }
 
 const WEEK_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
-function Month({ year, month, today, done, planned, label, onPick }: MonthProps) {
+function Month({ year, month, today, done, planned, label, onPick, sticky }: MonthProps) {
   const cells = monthGrid(year, month)
   const title = new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
 
   return (
     <>
-      <div className="mb-2 flex items-baseline justify-between">
-        <h2 className="font-display text-lg font-semibold">{title}</h2>
-      </div>
-      <div className="mb-1 grid grid-cols-7 gap-1">
-        {WEEK_LETTERS.map((d, i) => (
-          <span key={i} className="text-center text-[10px] text-zinc-600">
-            {d}
-          </span>
-        ))}
+      <div className={sticky ? 'safe-top sticky top-0 z-10 -mx-5 bg-ink px-5 pb-1' : ''}>
+        <h2 className="mb-2 font-display text-lg font-semibold">{title}</h2>
+        <div className="mb-1 grid grid-cols-7 gap-1 pb-2">
+          {WEEK_LETTERS.map((d, i) => (
+            <span key={i} className="text-center text-[10px] text-zinc-600">
+              {d}
+            </span>
+          ))}
+        </div>
       </div>
       <div className="grid grid-cols-7 gap-1">
         {cells.map((date, i) => {
@@ -273,12 +275,12 @@ function Months(props: Omit<MonthProps, 'year' | 'month'>) {
   useEffect(() => here.current?.scrollIntoView(), [])
 
   return (
-    <div className="mx-auto max-w-md space-y-8 pt-16">
+    <div className="mx-auto max-w-md">
       {months.map((m) => {
         const current = props.today.startsWith(`${m.year}-${String(m.month).padStart(2, '0')}`)
         return (
-          <div key={`${m.year}-${m.month}`} ref={current ? here : undefined} className="scroll-mt-16">
-            <Month {...props} year={m.year} month={m.month} />
+          <div key={`${m.year}-${m.month}`} ref={current ? here : undefined} className="scroll-mt-0 pb-6">
+            <Month {...props} year={m.year} month={m.month} sticky />
           </div>
         )
       })}
