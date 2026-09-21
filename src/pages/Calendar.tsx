@@ -82,7 +82,7 @@ export default function Calendar() {
       }
     >
       <Block className="card p-4">
-        <Year today={today} values={values} t={t} metric={profile.heatmap} planned={planned} />
+        <Year today={today} values={values} t={t} metric={profile.heatmap} />
       </Block>
 
       <Block>
@@ -172,19 +172,7 @@ function Logged({ session, unit, onDeleted }: { session: Session; unit: 'kg' | '
 }
 
 /** The year at a glance, a column per week. Scrolls sideways and starts on this week. */
-function Year({
-  today,
-  values,
-  t,
-  metric,
-  planned,
-}: {
-  today: string
-  values: Map<string, number>
-  t: number[]
-  metric: Heatmap
-  planned: Map<string, Slot[]>
-}) {
+function Year({ today, values, t, metric }: { today: string; values: Map<string, number>; t: number[]; metric: Heatmap }) {
   const ref = useRef<HTMLDivElement>(null)
   const cols = yearColumns(today)
   useLayoutEffect(() => {
@@ -212,13 +200,7 @@ function Year({
                 const future = d > today
                 const level = levelOf(values.get(d) ?? 0, t, metric)
                 return (
-                  <span
-                    key={d}
-                    title={d}
-                    className={`size-[9px] shrink-0 rounded-[2px] ${future ? 'bg-transparent' : SHADE[level]} ${
-                      !level && planned.has(d) ? 'ring-1 ring-white/25' : ''
-                    }`}
-                  />
+                  <span key={d} title={d} className={`size-[9px] shrink-0 rounded-[2px] ${future ? 'bg-transparent' : SHADE[level]}`} />
                 )
               })}
             </div>
@@ -266,18 +248,15 @@ function Month({ year, month, today, done, planned, label, onPick }: MonthProps)
           const session = done.get(date)?.[0]
           const slot = planned.get(date)?.[0]
           const text = session?.title ?? (slot ? label(slot) : '')
+          // filled = trained, tinted = planned; today is ringed either way
+          const fill = session ? 'bg-surface-2' : slot ? 'bg-surface' : ''
+          const ring = date === today ? 'ring-1 ring-white/40' : slot && !session ? 'ring-1 ring-white/10' : ''
           return (
-            <Tap
-              key={date}
-              onClick={() => onPick(date)}
-              className={`flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 ${session ? 'bg-surface-2' : ''} ${
-                date === today ? 'ring-1 ring-white/40' : ''
-              }`}
-            >
+            <Tap key={date} onClick={() => onPick(date)} className={`flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 ${fill} ${ring}`}>
               <span className={`font-display text-sm leading-none ${session ? 'font-bold text-white' : slot ? 'text-zinc-300' : 'text-zinc-600'}`}>
                 {Number(date.slice(8))}
               </span>
-              {text && <span className={`w-full truncate text-center text-[9px] leading-tight ${session ? 'text-zinc-300' : 'text-zinc-500'}`}>{text}</span>}
+              {text && <span className={`w-full truncate text-center text-[9px] leading-tight ${session ? 'text-zinc-300' : 'text-zinc-400'}`}>{text}</span>}
               {slot?.start && !session && <span className="text-[8px] leading-none text-zinc-600">{slotTime(slot).split('–')[0]}</span>}
             </Tap>
           )
