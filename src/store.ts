@@ -508,7 +508,7 @@ function setActive(active: Active | null) {
   else localStorage.removeItem(ACTIVE_KEY)
 }
 
-// the most recent logged set for an exercise, so a new workout starts where the last one ended
+/** the most recent logged set for an exercise, shown as a hint while you log the next one */
 export const lastSet = (exerciseId: string) =>
   state.sessions.find((s) => s.exercises.some((e) => e.exerciseId === exerciseId))?.exercises.find((e) => e.exerciseId === exerciseId)?.sets.at(-1)
 
@@ -520,15 +520,9 @@ export const startSession = (r: Routine, slotId: string | null = null) =>
     slotId,
     startedAt: Date.now(),
     exercises: r.exercises.map((e) => {
-      const last = lastSet(e.exerciseId)
       const targets = e.sets.length ? e.sets : [{ repsMin: 10, repsMax: 10 }]
-      return {
-        exerciseId: e.exerciseId,
-        name: e.name,
-        targets,
-        // weight comes from what you actually lifted last time; routines carry no target weight
-        sets: targets.map((t) => ({ weight: last?.weight ?? 0, reps: last?.reps ?? t.repsMax, done: false })),
-      }
+      // empty, never pre-filled: a set you tick must hold what you actually lifted
+      return { exerciseId: e.exerciseId, name: e.name, targets, sets: targets.map(() => ({ weight: 0, reps: 0, done: false })) }
     }),
   })
 
@@ -543,21 +537,14 @@ export const editSet = (ei: number, si: number, patch: Partial<SetLog>) =>
 export const addSet = (ei: number) =>
   editActive((a) => ({
     ...a,
-    exercises: a.exercises.map((e, i) => {
-      if (i !== ei) return e
-      const last = e.sets.at(-1) ?? { weight: 0, reps: 10 }
-      return { ...e, sets: [...e.sets, { ...last, done: false }] }
-    }),
+    exercises: a.exercises.map((e, i) => (i !== ei ? e : { ...e, sets: [...e.sets, { weight: 0, reps: 0, done: false }] })),
   }))
 
 export const addExercise = (exerciseId: string, name: string) =>
-  editActive((a) => {
-    const last = lastSet(exerciseId)
-    return {
-      ...a,
-      exercises: [...a.exercises, { exerciseId, name, targets: [{ repsMin: 10, repsMax: 10 }], sets: [{ weight: last?.weight ?? 0, reps: last?.reps ?? 10, done: false }] }],
-    }
-  })
+  editActive((a) => ({
+    ...a,
+    exercises: [...a.exercises, { exerciseId, name, targets: [{ repsMin: 10, repsMax: 10 }], sets: [{ weight: 0, reps: 0, done: false }] }],
+  }))
 
 export const discardSession = () => setActive(null)
 

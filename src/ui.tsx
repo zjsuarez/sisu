@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { animate, AnimatePresence, motion, useDragControls, useInView, type HTMLMotionProps, type Variants } from 'motion/react'
 
 export const spring = { type: 'spring', stiffness: 380, damping: 32 } as const
@@ -114,6 +114,17 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
       )}
     </AnimatePresence>
   )
+}
+
+/** a clock that ticks while something is running; off means no interval at all */
+export function useNow(on = true) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    if (!on) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [on])
+  return now
 }
 
 export const fmtDuration = (sec: number) => {

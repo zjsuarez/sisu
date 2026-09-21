@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { CalendarDays, ChartColumn, Dumbbell, House, Play, User } from 'lucide-react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { ensurePattern, useStore } from './store'
-import { spring } from './ui'
+import { fmtDuration, spring, useNow } from './ui'
 import Today from './pages/Today'
 import Workouts from './pages/Workouts'
 import CalendarScreen from './pages/Calendar'
@@ -62,6 +62,8 @@ export default function App() {
 function TabBar() {
   const { active } = useStore()
   const navigate = useNavigate()
+  const now = useNow(!!active)
+  const sets = active?.exercises.flatMap((e) => e.sets) ?? []
 
   return (
     <motion.nav
@@ -85,8 +87,13 @@ function TabBar() {
               <span className="absolute inset-0 animate-ping rounded-full bg-ink/40" />
               <Play size={14} fill="currentColor" />
             </span>
-            <span className="flex-1 font-display font-semibold">{active.routine}</span>
-            <span className="text-sm font-medium">Resume</span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-display font-semibold leading-tight">{active.routine}</span>
+              <span className="block text-xs opacity-60">
+                {sets.filter((s) => s.done).length}/{sets.length} sets
+              </span>
+            </span>
+            <span className="font-display text-sm font-semibold tabular-nums">{fmtDuration(Math.round((now - active.startedAt) / 1000))}</span>
           </motion.button>
         )}
       </AnimatePresence>

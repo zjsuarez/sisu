@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Check, Plus, Timer, X } from 'lucide-react'
+import { Check, ChevronDown, Plus, Timer, Trash2 } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, repLabel, toKg, useStore, volume } from '../store'
+import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, lastSet, repLabel, toKg, useStore, volume } from '../store'
 import { ExercisePicker } from '../exercisePicker'
-import { btn, fmtCompact, fmtDuration, spring, Tap } from '../ui'
+import { btn, fmtCompact, fmtDuration, spring, Tap, useNow } from '../ui'
 
 const REST_SEC = 90
 
@@ -15,15 +15,6 @@ const targetLabel = (targets: { repsMin: number; repsMax: number }[]) => {
   if (!targets.length) return 'added on the fly'
   const first = repLabel(targets[0])
   return targets.every((t) => repLabel(t) === first) ? `${targets.length} × ${first} reps` : targets.map(repLabel).join(' · ') + ' reps'
-}
-
-function useNow() {
-  const [now, setNow] = useState(Date.now)
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [])
-  return now
 }
 
 export default function Session() {
@@ -58,7 +49,10 @@ export default function Session() {
   }
 
   const finish = () => {
-    if (!done && !confirm('No sets completed. End without saving?')) return
+    if (!done && !confirm('No sets ticked. End without saving?')) return
+    // unticked sets are dropped, so say so before it happens rather than after
+    const left = total - done
+    if (done && left && !confirm(`${left} set${left > 1 ? 's' : ''} not ticked. ${left > 1 ? 'They' : 'It'} won't be saved. Finish anyway?`)) return
     const hours = (Date.now() - active.startedAt) / 3_600_000
     // forgetting to tap Finish would otherwise log a 10-hour workout, and put a 10-hour block in the calendar
     let end
@@ -82,8 +76,8 @@ export default function Session() {
       {/* sticky header */}
       <header className="safe-top sticky top-0 z-20 border-b border-line bg-ink/80 px-5 pb-4 backdrop-blur-xl">
         <div className="flex items-center justify-between pt-2">
-          <Tap onClick={discard} aria-label="Discard workout" className="grid size-10 place-items-center rounded-full bg-surface-2 text-zinc-400">
-            <X size={18} />
+          <Tap onClick={() => navigate('/')} aria-label="Minimize workout" className="grid size-10 place-items-center rounded-full bg-surface-2 text-zinc-400">
+            <ChevronDown size={20} />
           </Tap>
           <div className="text-center">
             <p className="font-display text-lg font-bold">{active.routine}</p>
@@ -107,7 +101,9 @@ export default function Session() {
       </header>
 
       <div className="space-y-4 px-5 pt-5">
-        {active.exercises.map((e, ei) => (
+        {active.exercises.map((e, ei) => {
+          const prev = lastSet(e.exerciseId) // last time's numbers, as a hint in the empty boxes
+          return (
           <motion.section
             key={e.name + ei}
             initial={{ opacity: 0, y: 20 }}
@@ -137,10 +133,11 @@ export default function Session() {
                     <NumInput
                       label={`${e.name} set ${si + 1} weight`}
                       value={fromKg(s.weight, profile.unit)}
+                      hint={prev ? String(fromKg(prev.weight, profile.unit)) : '0'}
                       step={profile.unit === 'kg' ? 2.5 : 5}
                       onChange={(w) => editSet(ei, si, { weight: toKg(w, profile.unit) })}
                     />
-                    <NumInput label={`${e.name} set ${si + 1} reps`} value={s.reps} step={1} onChange={(reps) => editSet(ei, si, { reps })} />
+                    <NumInput label={`${e.name} set ${si + 1} reps`} value={s.reps} hint={prev ? String(prev.reps) : '0'} step={1} onChange={(reps) => editSet(ei, si, { reps })} />
                     <Tap
                       onClick={() => toggle(ei, si, !!s.done)}
                       aria-label={s.done ? 'Mark set not done' : 'Complete set'}
@@ -159,10 +156,15 @@ export default function Session() {
               <Plus size={16} /> Add set
             </Tap>
           </motion.section>
-        ))}
+          )
+        })}
 
         <Tap onClick={() => setPicking(true)} className={`${btn.ghost} flex w-full items-center justify-center gap-2`}>
           <Plus size={18} /> Add exercise
+        </Tap>
+
+        <Tap onClick={discard} className="flex w-full items-center justify-center gap-2 py-3 text-sm font-medium text-red-400/80">
+          <Trash2 size={16} /> Discard workout
         </Tap>
       </div>
 
@@ -201,7 +203,7 @@ export default function Session() {
   )
 }
 
-function NumInput({ value, onChange, step, label }: { value: number; onChange: (n: number) => void; step: number; label: string }) {
+function NumInput({ value, onChange, step, label, hint = '0' }: { value: number; onChange: (n: number) => void; step: number; label: string; hint?: string }) {
   return (
     <input
       type="number"
@@ -210,7 +212,7 @@ function NumInput({ value, onChange, step, label }: { value: number; onChange: (
       min={0}
       step={step}
       value={value || ''}
-      placeholder="0"
+      placeholder={hint}
       onFocus={(e) => e.target.select()}
       onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
       className="h-11 w-full rounded-xl bg-surface-2 text-center font-display text-lg font-semibold tabular-nums outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-accent"
