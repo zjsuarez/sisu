@@ -2,6 +2,7 @@ import { motion } from 'motion/react'
 import { Check, CloudOff, CloudUpload, LoaderCircle, Monitor, Smartphone, TriangleAlert, X } from 'lucide-react'
 import { deviceId, removeDevice, useStore, type Device } from './store'
 import { fmtAgo, fmtDay, fmtTime, Tap } from './ui'
+import { ask } from './dialog'
 
 export const deviceLabel = (id: string, devices: Device[]) =>
   id === 'schedule-import' ? 'Schedule (imported)' : (devices.find((d) => d.id === id)?.name ?? 'another device')
@@ -71,7 +72,7 @@ export function Devices() {
             {/* reinstalls and cleared browsers leave dead entries behind; workouts they logged are untouched */}
             {d.id !== deviceId && (
               <Tap
-                onClick={() => confirm(`Remove ${d.name} from the list? Its workouts stay.`) && removeDevice(d.id)}
+                onClick={async () => (await ask({ title: `Remove ${d.name}?`, body: 'Its workouts stay.', confirm: 'Remove', danger: true })) && removeDevice(d.id)}
                 aria-label={`Remove ${d.name}`}
                 className="grid size-8 shrink-0 place-items-center self-center rounded-full bg-surface-2 text-zinc-500"
               >

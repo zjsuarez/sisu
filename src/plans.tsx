@@ -4,6 +4,7 @@ import { Check, Play, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { deletePlan, savePlan, setActivePlan, useStore, WEEKDAYS, type Plan, type Routine, type Session, type WeeklySchedule } from './store'
 import { btn, fmtShortDay, Tap } from './ui'
+import { ask } from './dialog'
 
 const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent'
 
@@ -145,8 +146,8 @@ export function PlanEditor({ plan, onClose, onDeleted }: { plan: Plan; onClose: 
       <div className="sticky bottom-0 -mx-5 flex gap-3 bg-gradient-to-t from-surface via-surface to-transparent px-5 pt-6 pb-2">
         {!isNew && (
           <Tap
-            onClick={() => {
-              if (!confirm(`Delete ${draft.name}? Its routines stay.`)) return
+            onClick={async () => {
+              if (!(await ask({ title: `Delete ${draft.name}?`, body: 'Its routines stay.', confirm: 'Delete', danger: true }))) return
               deletePlan(draft.id)
               onClose()
               onDeleted?.()

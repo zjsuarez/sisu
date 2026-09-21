@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { setActivePlan, startSession, useStore, type Routine } from '../store'
 import { PlanEditor, planStats, planSummary, RoutineRow } from '../plans'
 import { Block, btn, Page, Sheet, Tap } from '../ui'
+import { ask } from '../dialog'
 
 export default function PlanScreen() {
   const { id } = useParams()
@@ -21,8 +22,8 @@ export default function PlanScreen() {
   const st = planStats(plan, routines, sessions)
   const isActive = profile.activePlanId === plan.id
 
-  const start = (r: Routine) => {
-    if (active && !confirm(`Discard your ${active.routine} session in progress?`)) return
+  const start = async (r: Routine) => {
+    if (active && !(await ask({ title: 'Workout in progress', body: `Discard your ${active.routine} session and start this one?`, confirm: 'Discard', danger: true }))) return
     startSession(r)
     navigate('/session')
   }

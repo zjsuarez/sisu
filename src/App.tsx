@@ -14,6 +14,7 @@ import Session from './pages/Session'
 import Progress from './pages/Progress'
 import Profile from './pages/Profile'
 import SignIn, { Splash } from './pages/SignIn'
+import { Dialogs } from './dialog'
 
 const TABS = [
   { to: '/', label: 'Today', icon: House },
@@ -55,6 +56,7 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>{!fullScreen && <TabBar key="tabs" />}</AnimatePresence>
+      <Dialogs />
     </>
   )
 }

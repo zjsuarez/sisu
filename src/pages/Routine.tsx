@@ -5,6 +5,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { deleteRoutine, MUSCLES, newId, resolve, saveRoutine, useStore, type RepTarget, type Routine, type RoutineExercise } from '../store'
 import { ExercisePicker } from '../exercisePicker'
 import { btn, spring, Tap } from '../ui'
+import { ask } from '../dialog'
 
 const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent'
 const num = 'w-14 rounded-lg bg-ink py-1.5 text-center font-display font-semibold tabular-nums outline-none focus:ring-2 focus:ring-accent'
@@ -177,8 +178,8 @@ export default function RoutineEditor() {
         <div className="flex gap-3">
           {existing && (
             <Tap
-              onClick={() => {
-                if (!confirm(`Delete ${existing.name}? Past workouts stay.`)) return
+              onClick={async () => {
+                if (!(await ask({ title: `Delete ${existing.name}?`, body: 'Past workouts stay.', confirm: 'Delete', danger: true }))) return
                 deleteRoutine(existing.id)
                 navigate(-1)
               }}

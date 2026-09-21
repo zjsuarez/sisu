@@ -4,6 +4,7 @@ import { DatabaseBackup, Download, LogOut, Minus, Plus, Share, Smartphone } from
 import { deviceName, fullBackup, installed, renameDevice, setSettings, signOut, useStore } from '../store'
 import { Devices } from '../sync'
 import { Block, btn, Page, spring, Tap } from '../ui'
+import { ask, tell } from '../dialog'
 
 type InstallEvent = Event & { prompt: () => Promise<void> }
 
@@ -40,7 +41,7 @@ export default function Profile() {
     try {
       download(`firebase-backup-${new Date().toISOString().slice(0, 10)}.json`, await fullBackup())
     } catch (e) {
-      alert(`Backup failed, nothing was saved: ${e instanceof Error ? e.message : e}\n\nThis needs a connection.`)
+      tell({ title: 'Backup failed', body: `${e instanceof Error ? e.message : e}. Nothing was saved — this needs a connection.` })
     } finally {
       setSaving(false)
     }
@@ -60,7 +61,7 @@ export default function Profile() {
           </div>
         </div>
         <Tap
-          onClick={() => confirm(`Sign out of ${user?.email ?? 'Sisu'} on this device?`) && signOut()}
+          onClick={async () => (await ask({ title: 'Sign out?', body: `${user?.email ?? 'Sisu'} on this device.`, confirm: 'Sign out' })) && signOut()}
           className={`${btn.ghost} mt-4 flex w-full items-center justify-center gap-2 text-red-300`}
         >
           <LogOut size={18} /> Sign out

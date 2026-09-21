@@ -5,6 +5,7 @@ import { dayValues, levelOf, monthGrid, monthsAround, scale, yearColumns, ymd } 
 import { deleteSession, fromKg, setSettings, stats, useStore, volume, type Heatmap, type Session, type Slot } from '../store'
 import { blankSlot, SlotEditor, slotTime, toDraft, type Draft } from '../slots'
 import { Block, fmtDuration, Page, Sheet, Tap } from '../ui'
+import { ask } from '../dialog'
 
 const METRICS: { id: Heatmap; label: string }[] = [
   { id: 'time', label: 'Time' },
@@ -157,8 +158,8 @@ function Logged({ session, unit, onDeleted }: { session: Session; unit: 'kg' | '
         </p>
       </div>
       <Tap
-        onClick={() => {
-          if (!confirm(`Delete ${session.title}?`)) return
+        onClick={async () => {
+          if (!(await ask({ title: `Delete ${session.title}?`, body: 'The day goes back to planned.', confirm: 'Delete', danger: true }))) return
           deleteSession(session.id)
           onDeleted()
         }}

@@ -1,6 +1,7 @@
 import { Check, Trash2 } from 'lucide-react'
 import { deleteExercise, MUSCLE_IDS, MUSCLES, newId, saveExercise, type Exercise, type MuscleId } from './store'
 import { btn, Tap } from './ui'
+import { ask } from './dialog'
 
 export type ExerciseDraft = Omit<Exercise, 'custom'> & { isNew: boolean }
 
@@ -42,8 +43,8 @@ export function ExerciseForm({ draft, setDraft, onSaved }: { draft: ExerciseDraf
       <div className="sticky bottom-0 -mx-5 flex gap-3 bg-gradient-to-t from-surface via-surface to-transparent px-5 pt-6 pb-2">
         {!draft.isNew && (
           <Tap
-            onClick={() => {
-              if (!confirm(`Delete ${draft.name}? Past workouts keep it.`)) return
+            onClick={async () => {
+              if (!(await ask({ title: `Delete ${draft.name}?`, body: 'Past workouts keep it.', confirm: 'Delete', danger: true }))) return
               deleteExercise(draft.id)
               setDraft(null)
             }}

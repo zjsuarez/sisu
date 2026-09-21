@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { newId, seedStarterPlan, startSession, useStore, type Plan, type Routine } from '../store'
 import { PlanEditor, planStats, planSummary, RoutineRow } from '../plans'
 import { Block, btn, Page, Sheet, Tap } from '../ui'
+import { ask } from '../dialog'
 
 const blankPlan = (): Plan => ({ id: newId(), name: '', routineIds: [], schedule: null, defaultStart: null, defaultMinutes: null, generatedThrough: null, createdAt: Date.now() })
 
@@ -16,8 +17,8 @@ export default function Workouts() {
   const loose = routines.filter((r) => !r.planId || !plans.some((p) => p.id === r.planId))
   const ordered = [...plans].sort((a, b) => Number(b.id === profile.activePlanId) - Number(a.id === profile.activePlanId) || a.createdAt - b.createdAt)
 
-  const start = (r: Routine) => {
-    if (active && !confirm(`Discard your ${active.routine} session in progress?`)) return
+  const start = async (r: Routine) => {
+    if (active && !(await ask({ title: 'Workout in progress', body: `Discard your ${active.routine} session and start this one?`, confirm: 'Discard', danger: true }))) return
     startSession(r)
     navigate('/session')
   }

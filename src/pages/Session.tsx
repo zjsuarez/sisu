@@ -5,6 +5,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, lastSet, repLabel, toKg, useStore, volume } from '../store'
 import { ExercisePicker } from '../exercisePicker'
 import { btn, fmtCompact, fmtDuration, spring, Tap, useNow } from '../ui'
+import { ask, askText } from '../dialog'
 
 const REST_SEC = 90
 
@@ -48,16 +49,16 @@ export default function Session() {
     setRestUntil(wasDone ? null : Date.now() + REST_SEC * 1000)
   }
 
-  const finish = () => {
-    if (!done && !confirm('No sets ticked. End without saving?')) return
+  const finish = async () => {
+    if (!done && !(await ask({ title: 'No sets ticked', body: 'End this workout without saving it?', confirm: 'End', danger: true }))) return
     // unticked sets are dropped, so say so before it happens rather than after
     const left = total - done
-    if (done && left && !confirm(`${left} set${left > 1 ? 's' : ''} not ticked. ${left > 1 ? 'They' : 'It'} won't be saved. Finish anyway?`)) return
+    if (done && left && !(await ask({ title: `${left} set${left > 1 ? 's' : ''} not ticked`, body: `${left > 1 ? 'They' : 'It'} won't be saved.`, confirm: 'Finish' }))) return
     const hours = (Date.now() - active.startedAt) / 3_600_000
     // forgetting to tap Finish would otherwise log a 10-hour workout, and put a 10-hour block in the calendar
     let end
     if (hours > 3) {
-      const answer = prompt('This workout has been running for hours. What time did you actually finish? (HH:MM)', nowHm())
+      const answer = await askText({ title: 'Still running', body: 'This workout has been open for hours. What time did you finish?', value: nowHm(), type: 'time' })
       if (answer === null) return
       end = /^\d{1,2}:\d{2}$/.test(answer) ? answer.padStart(5, '0') : undefined
     }
@@ -65,8 +66,8 @@ export default function Session() {
     navigate('/')
   }
 
-  const discard = () => {
-    if (!confirm('Discard this workout?')) return
+  const discard = async () => {
+    if (!(await ask({ title: 'Discard workout?', body: 'Nothing about it is saved.', confirm: 'Discard', danger: true }))) return
     discardSession()
     navigate('/workouts')
   }
