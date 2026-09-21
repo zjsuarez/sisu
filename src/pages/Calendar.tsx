@@ -231,11 +231,12 @@ const WEEK_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 function Month({ year, month, today, done, planned, label, onPick, sticky }: MonthProps) {
   const cells = monthGrid(year, month)
   const title = new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  const now = today.startsWith(`${year}-${String(month).padStart(2, '0')}`) // the month you are actually in, scrolling past the others
 
   return (
     <>
       <div className={sticky ? 'safe-top sticky top-0 z-10 -mx-5 bg-ink px-5 pb-1' : ''}>
-        <h2 className="mb-2 font-display text-lg font-semibold">{title}</h2>
+        <h2 className={`mb-2 font-display text-lg font-semibold ${now ? 'text-white' : 'text-zinc-600'}`}>{title}</h2>
         <div className="mb-1 grid grid-cols-7 gap-1 pb-2">
           {WEEK_LETTERS.map((d, i) => (
             <span key={i} className="text-center text-[10px] text-zinc-600">
