@@ -508,6 +508,13 @@ function setActive(active: Active | null) {
   else localStorage.removeItem(ACTIVE_KEY)
 }
 
+/** every time you trained an exercise, newest first: the sets as they were logged */
+export const exerciseHistory = (exerciseId: string, limit = 12) =>
+  state.sessions
+    .filter((s) => s.exercises.some((e) => e.exerciseId === exerciseId))
+    .slice(0, limit)
+    .map((s) => ({ id: s.id, at: s.at, title: s.title, sets: s.exercises.filter((e) => e.exerciseId === exerciseId).flatMap((e) => e.sets) }))
+
 /** the most recent logged set for an exercise, shown as a hint while you log the next one */
 export const lastSet = (exerciseId: string) =>
   state.sessions.find((s) => s.exercises.some((e) => e.exerciseId === exerciseId))?.exercises.find((e) => e.exerciseId === exerciseId)?.sets.at(-1)

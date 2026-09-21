@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Check, ChevronDown, Plus, Timer, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, Expand, Plus, Timer, Trash2 } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, lastSet, repLabel, toKg, useStore, volume } from '../store'
 import { ExercisePicker } from '../exercisePicker'
 import { btn, fmtCompact, fmtDuration, spring, Tap, useNow } from '../ui'
 import { ask, askText } from '../dialog'
+import { effortLabel, NumInput } from '../sets'
+import Zen from './Zen'
 
 const REST_SEC = 90
+const ZEN_KEY = 'sisu.zen'
 
 const nowHm = () => new Date().toTimeString().slice(0, 5)
 
@@ -28,6 +31,13 @@ export default function Session() {
   const now = useNow()
   const [restUntil, setRestUntil] = useState<number | null>(null)
   const [picking, setPicking] = useState(false)
+  // zen mode sticks: if you train that way, every workout opens that way
+  const [zen, setZen] = useState(() => localStorage.getItem(ZEN_KEY) === '1')
+  const [chrono, setChrono] = useState({ base: 0, startedAt: null as number | null })
+  const showZen = (on: boolean) => {
+    setZen(on)
+    localStorage.setItem(ZEN_KEY, on ? '1' : '0')
+  }
 
   const restLeft = restUntil ? Math.max(0, Math.ceil((restUntil - now) / 1000)) : 0
   useEffect(() => {
@@ -43,6 +53,8 @@ export default function Session() {
 
   const total = active.exercises.reduce((n, e) => n + e.sets.length, 0)
   const done = active.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0)
+
+  const cols = profile.effort === 'none' ? 'grid-cols-[2rem_1fr_1fr_3rem]' : 'grid-cols-[1.5rem_1fr_1fr_1fr_2.75rem]'
 
   const toggle = (ei: number, si: number, wasDone: boolean) => {
     editSet(ei, si, { done: !wasDone })
@@ -72,6 +84,9 @@ export default function Session() {
     navigate('/workouts')
   }
 
+  if (zen && active.exercises.length)
+    return <Zen active={active} now={now} chrono={chrono} setChrono={setChrono} onExit={() => showZen(false)} onAdd={() => setPicking(true)} />
+
   return (
     <motion.main initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} transition={spring} className="mx-auto min-h-full max-w-md pb-40">
       {/* sticky header */}
@@ -84,9 +99,14 @@ export default function Session() {
             <p className="font-display text-lg font-bold">{active.routine}</p>
             <p className="font-mono text-sm text-accent tabular-nums">{fmtDuration(Math.round((now - active.startedAt) / 1000))}</p>
           </div>
-          <Tap onClick={finish} className="rounded-full bg-accent px-4 py-2 font-display text-sm font-semibold text-ink">
-            Finish
-          </Tap>
+          <div className="flex items-center gap-2">
+            <Tap onClick={() => showZen(true)} aria-label="Zen mode" className="grid size-10 place-items-center rounded-full bg-surface-2 text-zinc-400">
+              <Expand size={17} />
+            </Tap>
+            <Tap onClick={finish} className="rounded-full bg-accent px-4 py-2 font-display text-sm font-semibold text-ink">
+              Finish
+            </Tap>
+          </div>
         </div>
         <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-2">
           <motion.div className="h-full rounded-full bg-accent" animate={{ width: `${total ? (done / total) * 100 : 0}%` }} transition={spring} />
@@ -114,10 +134,11 @@ export default function Session() {
           >
             <h2 className="font-display text-lg font-semibold">{e.name}</h2>
             <p className="mb-3 text-xs text-zinc-500">{targetLabel(e.targets)}</p>
-            <div className="mb-1 grid grid-cols-[2rem_1fr_1fr_3rem] gap-2 px-1 text-[11px] font-semibold tracking-wider text-zinc-500 uppercase">
-              <span>Set</span>
+            <div className={`mb-1 grid ${cols} gap-2 px-1 text-[11px] font-semibold tracking-wider text-zinc-500 uppercase`}>
+              <span />
               <span className="text-center">{profile.unit}</span>
               <span className="text-center">Reps</span>
+              {profile.effort !== 'none' && <span className="text-center">{effortLabel(profile.effort)}</span>}
               <span />
             </div>
             <div className="space-y-1.5">
@@ -127,18 +148,33 @@ export default function Session() {
                     key={si}
                     layout
                     initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto', backgroundColor: s.done ? 'rgba(215,255,62,0.10)' : 'rgba(0,0,0,0)' }}
-                    className="grid grid-cols-[2rem_1fr_1fr_3rem] items-center gap-2 rounded-xl p-1"
+                    animate={{ opacity: 1, height: 'auto', backgroundColor: s.done ? 'rgba(250,250,250,0.10)' : 'rgba(0,0,0,0)' }}
+                    className={`grid ${cols} items-center gap-2 rounded-xl p-1`}
                   >
                     <span className={`text-center font-display font-semibold ${s.done ? 'text-accent' : 'text-zinc-500'}`}>{si + 1}</span>
                     <NumInput
                       label={`${e.name} set ${si + 1} weight`}
-                      value={fromKg(s.weight, profile.unit)}
+                      value={fromKg(s.weight, profile.unit) || undefined}
                       hint={prev ? String(fromKg(prev.weight, profile.unit)) : '0'}
                       step={profile.unit === 'kg' ? 2.5 : 5}
-                      onChange={(w) => editSet(ei, si, { weight: toKg(w, profile.unit) })}
+                      onChange={(w) => editSet(ei, si, { weight: toKg(w ?? 0, profile.unit) })}
                     />
-                    <NumInput label={`${e.name} set ${si + 1} reps`} value={s.reps} hint={prev ? String(prev.reps) : '0'} step={1} onChange={(reps) => editSet(ei, si, { reps })} />
+                    <NumInput
+                      label={`${e.name} set ${si + 1} reps`}
+                      value={s.reps || undefined}
+                      hint={prev ? String(prev.reps) : '0'}
+                      step={1}
+                      onChange={(reps) => editSet(ei, si, { reps: reps ?? 0 })}
+                    />
+                    {profile.effort !== 'none' && (
+                      <NumInput
+                        label={`${e.name} set ${si + 1} ${effortLabel(profile.effort)}`}
+                        value={profile.effort === 'rir' ? s.rir : s.rpe}
+                        hint="–"
+                        step={1}
+                        onChange={(v) => editSet(ei, si, profile.effort === 'rir' ? { rir: v } : { rpe: v })}
+                      />
+                    )}
                     <Tap
                       onClick={() => toggle(ei, si, !!s.done)}
                       aria-label={s.done ? 'Mark set not done' : 'Complete set'}
@@ -201,22 +237,5 @@ export default function Session() {
 
       <ExercisePicker open={picking} onClose={() => setPicking(false)} onAdd={(picks) => picks.forEach((p) => addExercise(p.exerciseId, p.name))} />
     </motion.main>
-  )
-}
-
-function NumInput({ value, onChange, step, label, hint = '0' }: { value: number; onChange: (n: number) => void; step: number; label: string; hint?: string }) {
-  return (
-    <input
-      type="number"
-      inputMode="decimal"
-      aria-label={label}
-      min={0}
-      step={step}
-      value={value || ''}
-      placeholder={hint}
-      onFocus={(e) => e.target.select()}
-      onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
-      className="h-11 w-full rounded-xl bg-surface-2 text-center font-display text-lg font-semibold tabular-nums outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-accent"
-    />
   )
 }
