@@ -152,4 +152,5 @@ export const fmtAgo = (t: number) => {
 export const fmtDay = (t: number) => new Date(t).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 /** short enough to sit in a stat column without wrapping */
 export const fmtShortDay = (t: number) => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-export const fmtTime = (t: number) => new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+/** 24h, always: the rest of the app writes times as 'HH:MM' and they should read the same */
+export const fmtTime = (t: number) => new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })

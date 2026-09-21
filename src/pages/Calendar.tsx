@@ -251,15 +251,16 @@ function Month({ year, month, today, done, planned, label, onPick, sticky }: Mon
           const session = done.get(date)?.[0]
           const slot = planned.get(date)?.[0]
           const text = session?.title ?? (slot ? label(slot) : '')
-          // filled = trained, tinted = planned; today is ringed either way
-          const fill = session ? 'bg-surface-2' : slot ? 'bg-surface' : ''
-          const ring = date === today ? 'ring-1 ring-white/40' : slot && !session ? 'ring-1 ring-white/10' : ''
+          // filled in = trained; a dashed outline = only planned. Today is ringed on top of either.
+          const fill = session ? 'bg-white/12' : ''
+          const outline = slot && !session ? 'outline-1 outline-dashed outline-white/30 -outline-offset-2' : ''
+          const ring = date === today ? 'ring-1 ring-white/50' : ''
           return (
-            <Tap key={date} onClick={() => onPick(date)} className={`flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 ${fill} ${ring}`}>
-              <span className={`font-display text-sm leading-none ${session ? 'font-bold text-white' : slot ? 'text-zinc-300' : 'text-zinc-600'}`}>
+            <Tap key={date} onClick={() => onPick(date)} className={`flex h-14 flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 ${fill} ${outline} ${ring}`}>
+              <span className={`font-display text-sm leading-none ${session ? 'font-bold text-white' : slot ? 'text-zinc-400' : 'text-zinc-600'}`}>
                 {Number(date.slice(8))}
               </span>
-              {text && <span className={`w-full truncate text-center text-[9px] leading-tight ${session ? 'text-zinc-300' : 'text-zinc-400'}`}>{text}</span>}
+              {text && <span className={`w-full truncate text-center text-[9px] leading-tight ${session ? 'font-semibold text-white' : 'text-zinc-500'}`}>{text}</span>}
               {slot?.start && !session && <span className="text-[8px] leading-none text-zinc-600">{slotTime(slot).split('–')[0]}</span>}
             </Tap>
           )
