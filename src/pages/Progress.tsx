@@ -2,6 +2,7 @@ import { motion } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Trophy } from 'lucide-react'
 import { fromKg, stats, useStore } from '../store'
+import { setText } from '../sets'
 import { deviceLabel } from '../sync'
 import { Block, Counter, fmtCompact, fmtDuration, fmtTime, Page, spring } from '../ui'
 
@@ -96,7 +97,7 @@ export default function Progress() {
                 {s.exercises.map((e) => (
                   <li key={e.name} className="flex justify-between gap-4">
                     <span className="text-zinc-300">{e.name}</span>
-                    <span className="text-right text-zinc-500 tabular-nums">{e.sets.map((x) => `${fromKg(x.weight, profile.unit)}×${x.reps}`).join('  ')}</span>
+                    <span className="text-right text-zinc-500 tabular-nums">{e.sets.map((x) => setText(fromKg(x.weight, profile.unit), x)).join('  ')}</span>
                   </li>
                 ))}
               </ul>

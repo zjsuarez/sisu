@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { exerciseHistory, fromKg, MUSCLES, resolve, useStore } from '../store'
 import { points, summary } from '../progress'
 import { ExerciseForm, type ExerciseDraft } from '../exerciseForm'
+import { setText } from '../sets'
 import { Block, fmtDay, Page, Sheet, Tap } from '../ui'
 
 /** One exercise: what it is, how it has gone, and every time you did it. */
@@ -98,7 +99,7 @@ export default function Exercise() {
                     <p className="mt-0.5 truncate font-display tabular-nums">
                       {history
                         .find((h) => h.at === p.at)
-                        ?.sets.map((s) => `${kg(s.weight)}×${s.reps}`)
+                        ?.sets.map((s) => setText(kg(s.weight), s))
                         .join('   ')}
                     </p>
                   </div>

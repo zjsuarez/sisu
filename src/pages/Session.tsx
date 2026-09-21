@@ -171,7 +171,8 @@ export default function Session() {
                         label={`${e.name} set ${si + 1} ${effortLabel(profile.effort)}`}
                         value={profile.effort === 'rir' ? s.rir : s.rpe}
                         hint="–"
-                        step={1}
+                        max={10}
+                        step={profile.effort === 'rpe' ? 0.5 : 1}
                         onChange={(v) => editSet(ei, si, profile.effort === 'rir' ? { rir: v } : { rpe: v })}
                       />
                     )}

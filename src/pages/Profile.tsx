@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { DatabaseBackup, Download, LogOut, Minus, Plus, Share, Smartphone } from 'lucide-react'
-import { deviceName, fullBackup, installed, renameDevice, setSettings, signOut, useStore } from '../store'
+import { deviceName, fullBackup, installed, renameDevice, setSettings, signOut, useStore, type Effort } from '../store'
 import { Devices } from '../sync'
 import { Block, btn, Page, spring, Tap } from '../ui'
 import { ask, tell } from '../dialog'
@@ -77,6 +77,23 @@ export default function Profile() {
               <button key={u} onClick={() => setSettings({ unit: u })} className="relative flex-1 py-2.5 font-display font-semibold">
                 {profile.unit === u && <motion.span layoutId="unit" transition={spring} className="absolute inset-0 rounded-xl bg-accent" />}
                 <span className={`relative ${profile.unit === u ? 'text-ink' : 'text-zinc-400'}`}>{u}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className={label}>Effort</span>
+          <p className="mt-0.5 text-sm text-muted">{profile.effort === 'none' ? 'Not logged' : profile.effort === 'rir' ? 'Reps left in the tank' : 'How hard it felt, 1 to 10'}</p>
+          <div className="mt-2 flex rounded-2xl bg-surface-2 p-1">
+            {([
+              ['rir', 'RIR'],
+              ['rpe', 'RPE'],
+              ['none', 'Off'],
+            ] as [Effort, string][]).map(([id, text]) => (
+              <button key={id} onClick={() => setSettings({ effort: id })} className="relative flex-1 py-2.5 font-display font-semibold">
+                {profile.effort === id && <motion.span layoutId="effort" transition={spring} className="absolute inset-0 rounded-xl bg-accent" />}
+                <span className={`relative ${profile.effort === id ? 'text-ink' : 'text-zinc-400'}`}>{text}</span>
               </button>
             ))}
           </div>

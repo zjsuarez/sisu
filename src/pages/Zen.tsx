@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { Check, ChevronLeft, EllipsisVertical, Pause, Play, Plus, RotateCcw } from 'lucide-react'
 import { addSet, editSet, exerciseHistory, fromKg, lastSet, muscleLabel, repLabel, resolve, toKg, useStore, type Active } from '../store'
-import { effortLabel, NumInput } from '../sets'
+import { effortLabel, NumInput, setText } from '../sets'
 import { fmtDay, fmtDuration, Sheet, Tap } from '../ui'
 
 type Chrono = { base: number; startedAt: number | null }
@@ -160,7 +160,8 @@ function ExercisePage({ ei, exercise, unit, effort }: { ei: number; exercise: Ac
                 label={`${exercise.name} set ${si + 1} ${effortLabel(effort)}`}
                 value={effort === 'rir' ? s.rir : s.rpe}
                 hint="–"
-                step={1}
+                max={10}
+                step={effort === 'rpe' ? 0.5 : 1}
                 onChange={(v) => editSet(ei, si, effort === 'rir' ? { rir: v } : { rpe: v })}
               />
             )}
@@ -194,7 +195,7 @@ function History({ exerciseId, unit }: { exerciseId: string; unit: 'kg' | 'lb' }
       {past.map((s) => (
         <div key={s.id} className="rounded-2xl bg-surface-2 px-4 py-3">
           <p className="text-xs text-zinc-500">{fmtDay(s.at)}</p>
-          <p className="mt-1 font-display tabular-nums">{s.sets.map((x) => `${fromKg(x.weight, unit)}×${x.reps}`).join('   ')}</p>
+          <p className="mt-1 font-display tabular-nums">{s.sets.map((x) => setText(fromKg(x.weight, unit), x)).join('   ')}</p>
         </div>
       ))}
     </div>

@@ -7,7 +7,14 @@
  */
 export type Logged = { weight: number; reps: number; rir?: number; rpe?: number }
 
-export const e1rm = (set: Logged) => (set.reps > 0 && set.weight > 0 ? set.weight * (1 + set.reps / 30) : 0)
+/**
+ * How many reps were left in the tank. RIR says it directly; RPE is the same scale upside down
+ * (RPE 8 = 2 left, RPE 10 = nothing left), so both end up as reps the set was worth.
+ */
+export const inReserve = (set: Logged) =>
+  set.rir !== undefined ? Math.max(0, set.rir) : set.rpe !== undefined ? Math.min(10, Math.max(0, 10 - set.rpe)) : 0
+
+export const e1rm = (set: Logged) => (set.reps > 0 && set.weight > 0 ? set.weight * (1 + (set.reps + inReserve(set)) / 30) : 0)
 
 /** the set that says the most about a session: the highest e1RM in it */
 export const bestSet = (sets: Logged[]) => sets.reduce<Logged | null>((best, s) => (!best || e1rm(s) > e1rm(best) ? s : best), null)

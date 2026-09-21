@@ -380,6 +380,19 @@ check('it estimates a 1RM from what was logged', /Estimated 1RM/i.test(ex) && /1
 check('and lists the day it was trained', /80\u00d78/.test(ex), ex.split('\n').slice(-6).join(' | '))
 await phone.shot('e2e-exercise')
 
+// ---------------------------------------------------------------- effort setting
+await phone.ev("location.hash = '#/profile'")
+await sleep(1500)
+log('  rpe:', await phone.ev(click('RPE')))
+await sleep(2000)
+check('the effort setting can be switched to RPE', plain((await rest(`users/${UID}/apps/gym`)) ?? {}).effort === 'rpe', plain((await rest(`users/${UID}/apps/gym`)) ?? {}).effort)
+log('  off:', await phone.ev(click('Off')))
+await sleep(2000)
+check('and turned off', plain((await rest(`users/${UID}/apps/gym`)) ?? {}).effort === 'none')
+await phone.ev(click('RIR'))
+await sleep(1500)
+await phone.shot('e2e-settings')
+
 // ---------------------------------------------------------------- weekly pattern -> calendar
 await phone.ev(`location.hash = '#/plan/${planId}'`)
 await sleep(1500)
