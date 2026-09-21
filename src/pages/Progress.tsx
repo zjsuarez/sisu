@@ -1,11 +1,13 @@
 import { motion } from 'motion/react'
-import { Trophy } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ChevronRight, Trophy } from 'lucide-react'
 import { fromKg, stats, useStore } from '../store'
 import { deviceLabel } from '../sync'
 import { Block, Counter, fmtCompact, fmtDuration, fmtTime, Page, spring } from '../ui'
 
 export default function Progress() {
   const { sessions, profile, devices } = useStore()
+  const navigate = useNavigate()
   const st = stats(sessions)
   const max = Math.max(1, ...st.weeks.map((w) => w.volume))
   const totalTime = sessions.reduce((t, s) => t + s.durationSec, 0)
@@ -59,14 +61,15 @@ export default function Progress() {
           <div className="card p-6 text-center text-sm text-muted">No records yet</div>
         ) : (
           <div className="card divide-y divide-line">
-            {st.prs.map(({ name, set }) => (
-              <div key={name} className="flex items-center justify-between px-5 py-3.5">
-                <span className="text-sm">{name}</span>
+            {st.prs.map(({ id, name, set }) => (
+              <button key={id} onClick={() => navigate(`/exercise/${id}`)} className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left">
+                <span className="min-w-0 flex-1 truncate text-sm">{name}</span>
                 <span className="font-display font-semibold tabular-nums">
                   {fromKg(set.weight, profile.unit)}
                   <span className="text-xs text-zinc-500">{profile.unit}</span> × {set.reps}
                 </span>
-              </div>
+                <ChevronRight size={16} className="shrink-0 text-zinc-600" />
+              </button>
             ))}
           </div>
         )}

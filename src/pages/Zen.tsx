@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { Check, ChevronLeft, EllipsisVertical, Pause, Play, Plus, RotateCcw } from 'lucide-react'
 import { addSet, editSet, exerciseHistory, fromKg, lastSet, muscleLabel, repLabel, resolve, toKg, useStore, type Active } from '../store'
@@ -27,6 +28,7 @@ export default function Zen({
   onAdd: () => void
 }) {
   const { profile } = useStore()
+  const navigate = useNavigate()
   const scroller = useRef<HTMLDivElement>(null)
   const [at, setAt] = useState(0)
   const [sheet, setSheet] = useState<null | 'menu' | 'history' | 'about'>(null)
@@ -98,7 +100,14 @@ export default function Zen({
               </Tap>
             </>
           )}
-          {sheet === 'history' && <History exerciseId={e.exerciseId} unit={profile.unit} />}
+          {sheet === 'history' && (
+            <>
+              <History exerciseId={e.exerciseId} unit={profile.unit} />
+              <Tap onClick={() => navigate(`/exercise/${e.exerciseId}`)} className="w-full rounded-2xl bg-surface-2 px-4 py-3.5 text-center font-medium text-zinc-300">
+                See progress
+              </Tap>
+            </>
+          )}
           {sheet === 'about' && <About exerciseId={e.exerciseId} />}
         </div>
       </Sheet>

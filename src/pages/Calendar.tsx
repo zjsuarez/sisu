@@ -5,6 +5,7 @@ import { dayValues, levelOf, monthGrid, monthsAround, scale, yearColumns, ymd } 
 import { deleteSession, fromKg, setSettings, stats, useStore, volume, type Heatmap, type Session, type Slot } from '../store'
 import { blankSlot, SlotEditor, slotTime, toDraft, type Draft } from '../slots'
 import { Block, fmtDuration, Page, Sheet, Tap } from '../ui'
+import { scroller } from '../App'
 import { ask } from '../dialog'
 
 const METRICS: { id: Heatmap; label: string }[] = [
@@ -39,16 +40,17 @@ export default function Calendar() {
 
   // scrolling past the last month opens the full calendar; the X scrolls back to the year grid
   useEffect(() => {
+    const el = scroller()
+    if (!el) return
     const onScroll = () => {
-      const doc = document.documentElement
-      if (doc.scrollHeight > innerHeight + 40 && innerHeight + scrollY >= doc.scrollHeight - 4) setExpanded(true)
+      if (el.scrollHeight > el.clientHeight + 40 && el.scrollTop + el.clientHeight >= el.scrollHeight - 4) setExpanded(true)
     }
-    addEventListener('scroll', onScroll, { passive: true })
-    return () => removeEventListener('scroll', onScroll)
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
   }, [])
   const collapse = () => {
     setExpanded(false)
-    scrollTo({ top: 0, behavior: 'smooth' })
+    scroller()?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const label = (s: Slot) => routines.find((r) => r.id === s.routineId)?.name ?? s.title ?? 'Gym'

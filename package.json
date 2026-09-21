@@ -14,7 +14,8 @@
     "test:e2e": "node tests/e2e.mjs",
     "test:backup": "node tests/backup.mjs",
     "test:naming": "node --experimental-strip-types tests/naming.ts",
-    "test:calendar": "node --experimental-strip-types tests/calendar.ts"
+    "test:calendar": "node --experimental-strip-types tests/calendar.ts",
+    "test:progress": "node --experimental-strip-types tests/progress.ts"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

@@ -309,6 +309,17 @@ await phone.ev(`document.querySelector('[aria-label="Leave zen mode"]').click()`
 await sleep(1000)
 check('leaving zen goes back to the whole workout', /Add exercise/.test(await phone.ev(body)))
 
+const typeIn = (label, value) => `(() => {
+  const i = document.querySelector('[aria-label="${label}"]')
+  if (!i) return 'NOT FOUND'
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(i, '${value}')
+  i.dispatchEvent(new Event('input', { bubbles: true }))
+  return i.value
+})()`
+await phone.ev(typeIn('Bench Press set 1 weight', '80'))
+await sleep(300)
+await phone.ev(typeIn('Bench Press set 1 reps', '8'))
+await sleep(300)
 await phone.ev(`document.querySelectorAll('[aria-label="Complete set"]')[0].click()`)
 await sleep(500)
 await phone.ev(`document.querySelectorAll('[aria-label="Complete set"]')[0].click()`)
@@ -357,6 +368,17 @@ await phone.shot('e2e-plan')
 await phone.ev("location.hash = '#/workouts'")
 await sleep(1500)
 await phone.shot('e2e-workouts-list')
+
+// ---------------------------------------------------------------- one exercise, over time
+await phone.ev("location.hash = '#/exercises'")
+await sleep(1500)
+await phone.ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('Bench Press'))?.click()`)
+await sleep(1800)
+const ex = await phone.ev(body)
+check('the catalogue opens the exercise itself', /^#\/exercise\//.test(await phone.ev('location.hash')), await phone.ev('location.hash'))
+check('it estimates a 1RM from what was logged', /Estimated 1RM/i.test(ex) && /101\.3/.test(ex), ex.split('\n').slice(0, 8).join(' | '))
+check('and lists the day it was trained', /80\u00d78/.test(ex), ex.split('\n').slice(-6).join(' | '))
+await phone.shot('e2e-exercise')
 
 // ---------------------------------------------------------------- weekly pattern -> calendar
 await phone.ev(`location.hash = '#/plan/${planId}'`)

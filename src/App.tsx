@@ -8,6 +8,7 @@ import Today from './pages/Today'
 import Workouts from './pages/Workouts'
 import CalendarScreen from './pages/Calendar'
 import Exercises from './pages/Exercises'
+import ExerciseScreen from './pages/Exercise'
 import RoutineEditor from './pages/Routine'
 import PlanScreen from './pages/Plan'
 import Session from './pages/Session'
@@ -15,6 +16,10 @@ import Progress from './pages/Progress'
 import Profile from './pages/Profile'
 import SignIn, { Splash } from './pages/SignIn'
 import { Dialogs } from './dialog'
+
+/** the one element that scrolls; pages that need the scroll position ask for it by id */
+export const SCROLLER = 'app-scroll'
+export const scroller = () => document.getElementById(SCROLLER)
 
 const TABS = [
   { to: '/', label: 'Today', icon: House },
@@ -29,6 +34,11 @@ export default function App() {
   const { user, plans, profile } = useStore()
   const fullScreen = location.pathname === '/session' || location.pathname.startsWith('/routine/')
 
+  // a new screen starts at the top: the shell scrolls, so it would otherwise keep the last one's offset
+  useEffect(() => {
+    scroller()?.scrollTo({ top: 0 })
+  }, [location.pathname])
+
   // keep the active plan's weekly pattern filled as the horizon moves; a no-op once it is
   useEffect(() => {
     if (user) ensurePattern()
@@ -39,13 +49,15 @@ export default function App() {
   if (!user) return <SignIn />
 
   return (
-    <>
+    <div className="relative flex h-full flex-col overflow-hidden">
+      <div id={SCROLLER} className="flex-1 overflow-y-auto overscroll-contain">
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<Today />} />
           <Route path="/workouts" element={<Workouts />} />
           <Route path="/calendar" element={<CalendarScreen />} />
           <Route path="/exercises" element={<Exercises />} />
+          <Route path="/exercise/:id" element={<ExerciseScreen />} />
           <Route path="/plan/:id" element={<PlanScreen />} />
           <Route path="/routine/:id" element={<RoutineEditor />} />
           <Route path="/session" element={<Session />} />
@@ -54,10 +66,11 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AnimatePresence>
+      </div>
 
       <AnimatePresence>{!fullScreen && <TabBar key="tabs" />}</AnimatePresence>
       <Dialogs />
-    </>
+    </div>
   )
 }
 
@@ -73,7 +86,7 @@ function TabBar() {
       animate={{ y: 0 }}
       exit={{ y: 120 }}
       transition={spring}
-      className="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4"
+      className="safe-bottom absolute inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4"
     >
       <AnimatePresence>
         {active && (

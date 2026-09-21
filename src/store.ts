@@ -898,11 +898,11 @@ export function stats(sessions: Session[], now = Date.now()) {
   })
 
   // keyed by exercise id, so renaming one never splits its records
-  const prs = new Map<string, { name: string; set: SetLog }>()
+  const prs = new Map<string, { id: string; name: string; set: SetLog }>()
   for (const e of sessions.flatMap((x) => x.exercises))
     for (const set of e.sets) {
       const best = prs.get(e.exerciseId)?.set
-      if (!best || set.weight > best.weight || (set.weight === best.weight && set.reps > best.reps)) prs.set(e.exerciseId, { name: e.name, set })
+      if (!best || set.weight > best.weight || (set.weight === best.weight && set.reps > best.reps)) prs.set(e.exerciseId, { id: e.exerciseId, name: e.name, set })
     }
 
   const weekDays = Array.from({ length: 7 }, (_, i) => days.has(new Date(week).setDate(new Date(week).getDate() + i)))

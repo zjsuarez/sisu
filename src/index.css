@@ -20,6 +20,7 @@ body,
 }
 
 body {
+  overflow: hidden; /* the app scrolls inside its shell, so the viewport never resizes under it */
   background: var(--color-ink);
   color: #fafafa;
   font-family: var(--font-sans);
