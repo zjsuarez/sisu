@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Check, ChevronDown, Expand, Plus, Timer, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronDown, Expand, Plus, Timer, Trash2 } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, lastSet, repLabel, toKg, useStore, volume } from '../store'
+import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, lastSet, moveExercise, repLabel, toKg, useStore, volume } from '../store'
 import { ExercisePicker } from '../exercisePicker'
 import { btn, fmtCompact, fmtDuration, spring, Tap, useNow } from '../ui'
 import { ask, askText } from '../dialog'
@@ -132,8 +132,29 @@ export default function Session() {
             transition={{ ...spring, delay: ei * 0.05 }}
             className="card p-4"
           >
-            <h2 className="font-display text-lg font-semibold">{e.name}</h2>
-            <p className="mb-3 text-xs text-zinc-500">{targetLabel(e.targets)}</p>
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate font-display text-lg font-semibold">{e.name}</h2>
+                <p className="text-xs text-zinc-500">{targetLabel(e.targets)}</p>
+              </div>
+              <Tap
+                onClick={() => moveExercise(ei, ei - 1)}
+                disabled={ei === 0}
+                aria-label={`Move ${e.name} up`}
+                className="grid size-8 place-items-center rounded-full bg-surface-2 text-zinc-400 disabled:text-zinc-700"
+              >
+                <ArrowUp size={14} />
+              </Tap>
+              <Tap
+                onClick={() => moveExercise(ei, ei + 1)}
+                disabled={ei === active.exercises.length - 1}
+                aria-label={`Move ${e.name} down`}
+                className="grid size-8 place-items-center rounded-full bg-surface-2 text-zinc-400 disabled:text-zinc-700"
+              >
+                <ArrowDown size={14} />
+              </Tap>
+            </div>
+            <div className="mb-3" />
             <div className={`mb-1 grid ${cols} gap-2 px-1 text-[11px] font-semibold tracking-wider text-zinc-500 uppercase`}>
               <span />
               <span className="text-center">{profile.unit}</span>

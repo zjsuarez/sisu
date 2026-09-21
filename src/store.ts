@@ -558,6 +558,15 @@ export const addSet = (ei: number) =>
     exercises: a.exercises.map((e, i) => (i !== ei ? e : { ...e, sets: [...e.sets, { weight: 0, reps: 0, done: false }] })),
   }))
 
+/** Move an exercise within the workout in progress. The saved session keeps the order you trained in. */
+export const moveExercise = (from: number, to: number) =>
+  editActive((a) => {
+    if (to < 0 || to >= a.exercises.length) return a
+    const exercises = [...a.exercises]
+    exercises.splice(to, 0, ...exercises.splice(from, 1))
+    return { ...a, exercises }
+  })
+
 export const addExercise = (exerciseId: string, name: string) =>
   editActive((a) => ({
     ...a,

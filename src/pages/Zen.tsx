@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { Check, ChevronLeft, EllipsisVertical, Pause, Play, Plus, RotateCcw } from 'lucide-react'
-import { addSet, editSet, exerciseHistory, fromKg, lastSet, muscleLabel, repLabel, resolve, toKg, useStore, type Active, type Chrono } from '../store'
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, EllipsisVertical, Pause, Play, Plus, RotateCcw } from 'lucide-react'
+import { addSet, editSet, exerciseHistory, fromKg, lastSet, moveExercise, muscleLabel, repLabel, resolve, toKg, useStore, type Active, type Chrono } from '../store'
 import { effortLabel, NumInput, setText } from '../sets'
 import { fmtDay, fmtDuration, Sheet, Tap } from '../ui'
 
@@ -43,6 +43,15 @@ export default function Zen({
   useEffect(() => {
     setSheet(null)
   }, [i])
+
+  // moving the exercise you are on: the view follows it to its new place
+  const moveTo = (to: number) => {
+    if (to < 0 || to >= active.exercises.length) return
+    moveExercise(i, to)
+    setSheet(null)
+    const el = scroller.current
+    if (el) requestAnimationFrame(() => el.scrollTo({ left: to * el.clientWidth }))
+  }
 
   if (!e) return null
 
@@ -96,6 +105,24 @@ export default function Zen({
               <Tap onClick={onAdd} className="w-full rounded-2xl bg-surface-2 px-4 py-3.5 text-left font-medium text-zinc-300">
                 Add exercise
               </Tap>
+              <div className="flex gap-2">
+                <Tap
+                  onClick={() => moveTo(i - 1)}
+                  disabled={i === 0}
+                  aria-label="Move exercise earlier"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-surface-2 py-3.5 font-medium text-zinc-300 disabled:text-zinc-700"
+                >
+                  <ArrowLeft size={16} /> Earlier
+                </Tap>
+                <Tap
+                  onClick={() => moveTo(i + 1)}
+                  disabled={i === active.exercises.length - 1}
+                  aria-label="Move exercise later"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-surface-2 py-3.5 font-medium text-zinc-300 disabled:text-zinc-700"
+                >
+                  Later <ArrowRight size={16} />
+                </Tap>
+              </div>
             </>
           )}
           {sheet === 'history' && (
