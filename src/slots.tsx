@@ -1,19 +1,16 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { CalendarPlus, Check, Trash2 } from 'lucide-react'
-import { deleteSlot, newId, saveSlot, useStore, ymd, type Slot } from './store'
+import { addMinutes, deleteSlot, newId, saveSlot, useStore, ymd, type Slot } from './store'
 import { btn, fmtDay, Sheet, Tap } from './ui'
 
-type Draft = { id: string; date: string; start: string; end: string; routineId: string | null; isNew: boolean }
+export type Draft = { id: string; date: string; start: string | null; end: string | null; routineId: string | null; isNew: boolean }
 
-const addMinutes = (time: string, mins: number) => {
-  const [h, m] = time.split(':').map(Number)
-  const t = (h * 60 + m + mins) % 1440
-  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
-}
+export const blankSlot = (date = ymd(Date.now())): Draft => ({ id: newId(), date, start: null, end: null, routineId: null, isNew: true })
+export const toDraft = (s: Slot): Draft => ({ id: s.id, date: s.date, start: s.start, end: s.end, routineId: s.routineId, isNew: false })
 
-const blank = (): Draft => ({ id: newId(), date: ymd(Date.now()), start: '18:00', end: '19:15', routineId: null, isNew: true })
-const toDraft = (s: Slot): Draft => ({ id: s.id, date: s.date, start: s.start, end: s.end, routineId: s.routineId, isNew: false })
+/** "18:00–19:15", or nothing at all when the day has no assigned time */
+export const slotTime = (s: { start: string | null; end: string | null }) => (s.start ? `${s.start}–${s.end}` : '')
 
 /** Planned workouts. The schedule app plans into the same list, so anything added there shows up here. */
 export function Plan() {
@@ -28,7 +25,7 @@ export function Plan() {
     <>
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-display text-xl font-semibold">Planned</h3>
-        <Tap onClick={() => setDraft(blank())} className="flex items-center gap-1.5 text-sm text-zinc-400">
+        <Tap onClick={() => setDraft(blankSlot())} className="flex items-center gap-1.5 text-sm text-zinc-400">
           <CalendarPlus size={16} /> Plan
         </Tap>
       </div>
@@ -51,12 +48,13 @@ export function Plan() {
                 >
                   <div className={`grid w-14 shrink-0 place-items-center rounded-xl py-1.5 ${missed ? 'bg-surface-2 text-zinc-500' : 'bg-accent/10 text-accent'}`}>
                     <span className="text-[10px] font-semibold uppercase">{s.date === today ? 'Today' : fmtDay(s.at).split(' ')[0]}</span>
-                    <span className="font-display text-sm font-bold">{s.start}</span>
+                    <span className="font-display text-sm font-bold">{s.start ?? new Date(s.at).getDate()}</span>
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold">{label(s)}</p>
                     <p className="text-xs text-zinc-500">
-                      {fmtDay(s.at)} · {s.start}–{s.end}
+                      {fmtDay(s.at)}
+                      {s.start && ` · ${slotTime(s)}`}
                     </p>
                   </div>
                   {missed && <span className="rounded-full bg-surface-2 px-2.5 py-1 text-xs text-zinc-500">missed</span>}
@@ -68,50 +66,64 @@ export function Plan() {
       )}
 
       <Sheet open={!!draft} onClose={() => setDraft(null)} title={draft?.isNew ? 'Plan a workout' : 'Edit plan'}>
-        {draft && <Editor draft={draft} setDraft={setDraft} />}
+        {draft && <SlotEditor draft={draft} setDraft={setDraft} />}
       </Sheet>
     </>
   )
 }
 
-function Editor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft | null) => void }) {
+const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none focus:border-accent'
+const chip = (on: boolean) => `rounded-full border px-4 py-2 text-sm ${on ? 'border-accent bg-accent/10 text-accent' : 'border-line text-zinc-400'}`
+
+export function SlotEditor({ draft, setDraft, showDate = true }: { draft: Draft; setDraft: (d: Draft | null) => void; showDate?: boolean }) {
   const { routines } = useStore()
   const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch })
-  const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none focus:border-accent'
 
   return (
     <div className="space-y-4 pb-4">
-      <label className="block">
-        <span className="text-xs font-semibold tracking-widest text-zinc-500 uppercase">Day</span>
-        <input type="date" value={draft.date} onChange={(e) => e.target.value && set({ date: e.target.value })} className={`${field} mt-2`} />
-      </label>
+      {showDate && (
+        <label className="block">
+          <span className="text-xs font-semibold tracking-widest text-zinc-500 uppercase">Day</span>
+          <input type="date" value={draft.date} onChange={(e) => e.target.value && set({ date: e.target.value })} className={`${field} mt-2`} />
+        </label>
+      )}
 
-      <div className="flex gap-3">
-        <label className="flex-1">
-          <span className="text-xs font-semibold tracking-widest text-zinc-500 uppercase">From</span>
-          <input
-            type="time"
-            value={draft.start}
-            onChange={(e) => e.target.value && set({ start: e.target.value, end: addMinutes(e.target.value, 75) })}
-            className={`${field} mt-2`}
-          />
-        </label>
-        <label className="flex-1">
-          <span className="text-xs font-semibold tracking-widest text-zinc-500 uppercase">To</span>
-          <input type="time" value={draft.end} onChange={(e) => e.target.value && set({ end: e.target.value })} className={`${field} mt-2`} />
-        </label>
+      <div>
+        <span className="text-xs font-semibold tracking-widest text-zinc-500 uppercase">Time</span>
+        <div className="mt-2 flex gap-2">
+          <Tap onClick={() => set({ start: null, end: null })} className={chip(!draft.start)}>
+            None
+          </Tap>
+          <Tap onClick={() => !draft.start && set({ start: '18:00', end: '19:15' })} className={chip(!!draft.start)}>
+            At a time
+          </Tap>
+        </div>
       </div>
+
+      {draft.start && (
+        <div className="flex gap-3">
+          <label className="flex-1">
+            <span className="text-xs font-semibold tracking-widest text-zinc-500 uppercase">From</span>
+            <input
+              type="time"
+              value={draft.start}
+              onChange={(e) => e.target.value && set({ start: e.target.value, end: addMinutes(e.target.value, 75) })}
+              className={`${field} mt-2`}
+            />
+          </label>
+          <label className="flex-1">
+            <span className="text-xs font-semibold tracking-widest text-zinc-500 uppercase">To</span>
+            <input type="time" value={draft.end ?? ''} onChange={(e) => e.target.value && set({ end: e.target.value })} className={`${field} mt-2`} />
+          </label>
+        </div>
+      )}
 
       <p className="pt-2 text-xs font-semibold tracking-widest text-zinc-500 uppercase">Routine</p>
       <div className="flex flex-wrap gap-2">
         {routines.map((r) => {
           const on = draft.routineId === r.id
           return (
-            <Tap
-              key={r.id}
-              onClick={() => set({ routineId: on ? null : r.id })}
-              className={`flex items-center gap-1 rounded-full border px-3.5 py-2 text-sm transition-colors ${on ? 'border-accent bg-accent/10 text-accent' : 'border-line text-zinc-400'}`}
-            >
+            <Tap key={r.id} onClick={() => set({ routineId: on ? null : r.id })} className={`flex items-center gap-1 ${chip(on)}`}>
               {on && <Check size={14} />} {r.name}
             </Tap>
           )
@@ -134,8 +146,9 @@ function Editor({ draft, setDraft }: { draft: Draft; setDraft: (d: Draft | null)
         )}
         <Tap
           onClick={() => {
-            // never writes sessionId: the slot is shared with the schedule app, so only changed fields go up
-            saveSlot(draft.id, { date: draft.date, start: draft.start, end: draft.end, routineId: draft.routineId, title: null })
+            // never writes sessionId: the slot is shared with the schedule app, so only changed fields go up.
+            // generated: false marks it as touched by hand, so re-running a plan's pattern leaves it alone.
+            saveSlot(draft.id, { date: draft.date, start: draft.start, end: draft.start ? draft.end : null, routineId: draft.routineId, title: null, generated: false })
             setDraft(null)
           }}
           className={`${btn.primary} flex-1`}

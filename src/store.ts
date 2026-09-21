@@ -16,6 +16,7 @@ import {
   type QuerySnapshot,
 } from 'firebase/firestore'
 import { auth, db } from './firebase'
+import { addDays, addMinutes, toMin, volume, weekdayOf, ymd } from './calendar'
 
 import { BUILT_IN, BUILT_IN_MODIFIERS, canonicalExerciseId, resolveExercise, type Exercise, type Modifier, type MuscleId } from './exercises'
 
@@ -23,6 +24,7 @@ import { BUILT_IN, BUILT_IN_MODIFIERS, canonicalExerciseId, resolveExercise, typ
 
 export { MUSCLES, MUSCLE_IDS, muscleLabel, MODIFIER_GROUPS, BUILT_IN_MODIFIERS, buildExerciseId, splitExerciseId, variantName } from './exercises'
 export type { Exercise, Modifier, ModifierGroup, MuscleId, ResolvedExercise } from './exercises'
+export { addDays, addMinutes, volume, weekdayOf, ymd }
 
 /** effort is stored with its kind, never a bare number: switching the setting must not reinterpret history */
 export type SetLog = { weight: number; reps: number; rir?: number; rpe?: number; done?: boolean }
@@ -34,7 +36,16 @@ export type Routine = { id: string; name: string; planId: string | null; muscles
 export type WeekdayId = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 export type WeeklySchedule = Record<WeekdayId, string | null>
 /** A plan is a name, its routines, and either a weekly pattern or nothing at all. */
-export type Plan = { id: string; name: string; routineIds: string[]; schedule: WeeklySchedule | null; defaultStart: string | null; defaultMinutes: number | null; createdAt: number }
+export type Plan = {
+  id: string
+  name: string
+  routineIds: string[]
+  schedule: WeeklySchedule | null
+  defaultStart: string | null
+  defaultMinutes: number | null
+  generatedThrough: string | null // last date the weekly pattern filled, so deleting a day doesn't resurrect it
+  createdAt: number
+}
 export type Session = {
   id: string
   date: string // 'YYYY-MM-DD' local
@@ -55,17 +66,21 @@ export type Device = { id: string; name: string; type: 'phone' | 'desktop'; last
 export type Slot = {
   id: string
   date: string
-  start: string
-  end: string
+  start: string | null // both-or-neither with end; null = no time assigned
+  end: string | null
   routineId: string | null
   title: string | null
   sessionId: string | null // set when a logged workout fulfils this slot; null = still planned
-  at: number // derived: local ms of date + start
+  planId: string | null // set on slots a plan's weekly pattern produced
+  generated: boolean // true = written by the pattern, so re-generating may replace it
+  at: number // derived: local ms of date + start (midnight when untimed)
 }
 export type ActiveExercise = ExerciseLog & { targets: RepTarget[] }
 export type Active = { routineId: string; routine: string; muscles: MuscleId[]; startedAt: number; exercises: ActiveExercise[]; slotId: string | null }
 export type Effort = 'rir' | 'rpe' | 'none'
-export type Profile = { name: string; unit: 'kg' | 'lb'; weeklyGoal: number; effort: Effort; activePlanId: string | null }
+/** what the year grid shades by */
+export type Heatmap = 'time' | 'sets' | 'volume' | 'plain'
+export type Profile = { name: string; unit: 'kg' | 'lb'; weeklyGoal: number; effort: Effort; heatmap: Heatmap; activePlanId: string | null }
 export type Sync = { waiting: number; inSync: boolean; online: boolean; error: string | null }
 export type State = {
   user: User | null | undefined // undefined while the saved sign-in is being restored
@@ -106,7 +121,7 @@ const SEED_ROUTINES: { name: string; exercises: RoutineExercise[] }[] = [
   { name: 'Legs', exercises: [seedEx('back-squat', 4, 6), seedEx('romanian-deadlift', 3, 10), seedEx('leg-press', 3, 12), seedEx('calf-raise~standing', 4, 15)] },
 ]
 
-const DEFAULT_SETTINGS = { unit: 'kg' as const, weeklyGoal: 4, effort: 'rir' as const, activePlanId: null }
+const DEFAULT_SETTINGS = { unit: 'kg' as const, weeklyGoal: 4, effort: 'rir' as const, heatmap: 'time' as const, activePlanId: null }
 
 export const newId = () => crypto.randomUUID()
 
@@ -119,10 +134,6 @@ export const fromKg = (kg: number, unit: Profile['unit']) => (unit === 'kg' ? Ma
 /* ---------- local dates (same convention as the schedule app: local strings, no time zone) ---------- */
 
 const pad = (n: number) => String(n).padStart(2, '0')
-export const ymd = (t: number) => {
-  const d = new Date(t)
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
 const hm = (t: number) => {
   const d = new Date(t)
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`
@@ -131,10 +142,6 @@ const toMs = (date: string, time: string) => {
   const [y, m, d] = date.split('-').map(Number)
   const [h, min] = time.split(':').map(Number)
   return new Date(y, m - 1, d, h, min).getTime()
-}
-const toMin = (time: string) => {
-  const [h, m] = time.split(':').map(Number)
-  return h * 60 + m
 }
 // end < start crosses midnight
 const durationSec = (start: string, end: string) => (((toMin(end) - toMin(start)) % 1440) + 1440) % 1440 * 60
@@ -298,6 +305,7 @@ function listen(user: User) {
           unit: snap.get('unit') ?? DEFAULT_SETTINGS.unit,
           weeklyGoal: snap.get('weeklyGoal') ?? DEFAULT_SETTINGS.weeklyGoal,
           effort: snap.get('effort') ?? DEFAULT_SETTINGS.effort,
+          heatmap: snap.get('heatmap') ?? DEFAULT_SETTINGS.heatmap,
           activePlanId: snap.get('activePlanId') ?? null,
         },
       })
@@ -315,6 +323,7 @@ function listen(user: User) {
             schedule: d.get('schedule') ?? null,
             defaultStart: d.get('defaultStart') ?? null,
             defaultMinutes: d.get('defaultMinutes') ?? null,
+            generatedThrough: d.get('generatedThrough') ?? null,
             createdAt: ms(d.get('createdAt')) ?? Date.now(),
           })),
       })
@@ -383,7 +392,19 @@ function listen(user: User) {
         slots: snap.docs
           .map((d) => {
             const x = d.data()
-            return { id: d.id, date: x.date, start: x.start, end: x.end, routineId: x.routineId ?? null, title: x.title ?? null, sessionId: x.sessionId ?? null, at: toMs(x.date, x.start) }
+            const timed = typeof x.start === 'string' && typeof x.end === 'string' // both-or-neither; anything else reads as untimed
+            return {
+              id: d.id,
+              date: x.date,
+              start: timed ? x.start : null,
+              end: timed ? x.end : null,
+              routineId: x.routineId ?? null,
+              title: x.title ?? null,
+              sessionId: x.sessionId ?? null,
+              planId: x.planId ?? null,
+              generated: !!x.generated,
+              at: toMs(x.date, timed ? x.start : '00:00'),
+            }
           })
           .sort((a, b) => a.at - b.at),
       })
@@ -579,6 +600,16 @@ export function finishSession(end = hm(Date.now())) {
   heartbeat()
 }
 
+/** Sisu only: the schedule app offers no delete. The day it fulfilled goes back to being planned. */
+export function deleteSession(id: string) {
+  const uid = me()
+  const batch = writeBatch(db)
+  batch.delete(doc(col(uid, 'sessions'), id))
+  for (const s of state.slots.filter((x) => x.sessionId === id)) batch.set(doc(col(uid, 'slots'), s.id), { sessionId: null }, { merge: true })
+  batch.commit().catch(fail)
+  heartbeat()
+}
+
 /**
  * Slots are co-owned with the schedule app, so only ever write the fields being changed.
  * A whole-doc write would erase a `sessionId` or a time the other app set a second earlier.
@@ -591,6 +622,81 @@ export function saveSlot(id: string, patch: Partial<Omit<Slot, 'id' | 'at'>>) {
 export function deleteSlot(id: string) {
   deleteDoc(doc(col(me(), 'slots'), id)).catch(fail)
   heartbeat()
+}
+
+/* ---------- weekly pattern ---------- */
+
+/** how far ahead a plan's weekly pattern fills the calendar */
+const HORIZON_DAYS = 56
+
+/** The days a plan's weekly pattern covers, from `from` up to the horizon. Pure: the test drives this. */
+export function patternDays(plan: Plan, from: string, days = HORIZON_DAYS) {
+  const out: { date: string; routineId: string }[] = []
+  if (!plan.schedule) return out
+  for (let i = 0; i < days; i++) {
+    const date = addDays(from, i)
+    const routineId = plan.schedule[weekdayOf(date)]
+    if (routineId) out.push({ date, routineId })
+  }
+  return out
+}
+
+/** deterministic, so generating twice overwrites instead of duplicating */
+const generatedId = (planId: string, date: string) => `gen-${planId}-${date}`
+
+const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000)
+
+/**
+ * Fill the calendar from the plan's weekly pattern: one slot per patterned day, skipping days that
+ * already hold a plan, and never going back over `generatedThrough` — a day you deleted stays deleted.
+ */
+export function generateSlots(plan: Plan, today = ymd(Date.now())) {
+  if (!plan.schedule) return
+  const from = plan.generatedThrough && plan.generatedThrough >= today ? addDays(plan.generatedThrough, 1) : today
+  const span = HORIZON_DAYS - daysBetween(today, from)
+  if (span <= 0) return
+  const days = patternDays(plan, from, span)
+  const uid = me()
+  const batch = writeBatch(db)
+  let wrote = 0
+  for (const { date, routineId } of days) {
+    const id = generatedId(plan.id, date)
+    if (state.slots.some((s) => s.date === date && s.id !== id)) continue // a plan is already there, by hand or from Schedule
+    const end = plan.defaultStart ? addMinutes(plan.defaultStart, plan.defaultMinutes ?? 75) : null
+    batch.set(doc(col(uid, 'slots'), id), { date, start: plan.defaultStart, end, routineId, title: null, sessionId: null, planId: plan.id, generated: true }, { merge: true })
+    wrote++
+  }
+  const through = addDays(today, HORIZON_DAYS - 1)
+  if (!wrote && plan.generatedThrough === through) return
+  batch.set(doc(col(uid, 'plans'), plan.id), { generatedThrough: through }, { merge: true })
+  batch.commit().catch(fail)
+  heartbeat()
+}
+
+/** Drop the future days a pattern laid down, leaving anything planned by hand or already trained. */
+function clearGenerated(planId: string | null) {
+  if (!planId) return
+  const uid = me()
+  const today = ymd(Date.now())
+  const stale = state.slots.filter((s) => s.generated && s.planId === planId && !s.sessionId && s.date >= today)
+  const batch = writeBatch(db)
+  for (const s of stale) batch.delete(doc(col(uid, 'slots'), s.id))
+  batch.set(doc(col(uid, 'plans'), planId), { generatedThrough: null }, { merge: true })
+  batch.commit().catch(fail)
+  set({ slots: state.slots.filter((s) => !stale.includes(s)) }) // so a re-generate doesn't read them as "already planned"
+}
+
+/** The pattern changed: drop the untouched future days it made, then lay the new ones down. */
+function applyPattern(plan: Plan) {
+  clearGenerated(plan.id)
+  generateSlots({ ...plan, generatedThrough: null })
+}
+
+
+/** Called on launch: keeps the active plan's pattern filled as the horizon moves. */
+export function ensurePattern() {
+  const plan = state.plans.find((p) => p.id === state.profile.activePlanId)
+  if (plan?.schedule) generateSlots(plan)
 }
 
 /**
@@ -667,19 +773,30 @@ export function seedStarterPlan() {
     batch.set(doc(col(uid, 'routines'), id), { name: r.name, planId, muscles: musclesOf(r.exercises), exercises: r.exercises, createdAt: Timestamp.fromMillis(Date.now() + i) })
     return id
   })
-  batch.set(doc(col(uid, 'plans'), planId), { name: 'Push Pull Legs', routineIds, schedule: null, defaultStart: null, defaultMinutes: null, createdAt: Timestamp.now() })
+  batch.set(doc(col(uid, 'plans'), planId), { name: 'Push Pull Legs', routineIds, schedule: null, defaultStart: null, defaultMinutes: null, generatedThrough: null, createdAt: Timestamp.now() })
   batch.set(gymRef(uid), { activePlanId: planId }, { merge: true })
   batch.commit().catch(fail)
   heartbeat()
 }
 
 export function savePlan(plan: Plan) {
-  const isNew = !state.plans.some((x) => x.id === plan.id)
+  const was = state.plans.find((x) => x.id === plan.id)
+  const patternChanged = JSON.stringify([was?.schedule, was?.defaultStart, was?.defaultMinutes]) !== JSON.stringify([plan.schedule, plan.defaultStart, plan.defaultMinutes])
+  const saved: Plan = { ...plan, name: plan.name.trim(), generatedThrough: patternChanged ? null : plan.generatedThrough }
   setDoc(
     doc(col(me(), 'plans'), plan.id),
-    { name: plan.name.trim(), routineIds: plan.routineIds, schedule: plan.schedule, defaultStart: plan.defaultStart, defaultMinutes: plan.defaultMinutes, ...(isNew && { createdAt: Timestamp.now() }) },
+    {
+      name: saved.name,
+      routineIds: saved.routineIds,
+      schedule: saved.schedule,
+      defaultStart: saved.defaultStart,
+      defaultMinutes: saved.defaultMinutes,
+      generatedThrough: saved.generatedThrough,
+      ...(!was && { createdAt: Timestamp.now() }),
+    },
     { merge: true },
   ).catch(fail)
+  if (patternChanged) applyPattern(saved)
   heartbeat()
 }
 
@@ -687,6 +804,7 @@ export function savePlan(plan: Plan) {
 export function deletePlan(id: string) {
   const uid = me()
   const batch = writeBatch(db)
+  clearGenerated(id)
   batch.delete(doc(col(uid, 'plans'), id))
   for (const r of state.routines.filter((r) => r.planId === id)) batch.set(doc(col(uid, 'routines'), r.id), { planId: null }, { merge: true })
   if (state.profile.activePlanId === id) batch.set(gymRef(uid), { activePlanId: null }, { merge: true })
@@ -694,7 +812,10 @@ export function deletePlan(id: string) {
   heartbeat()
 }
 
-export const setActivePlan = (id: string | null) => setSettings({ activePlanId: id })
+export const setActivePlan = (id: string | null) => {
+  clearGenerated(state.profile.activePlanId) // the old plan's pattern stops filling days the new one wants
+  setSettings({ activePlanId: id })
+}
 
 /** Custom exercises only: the built-ins live in code and are the same for everyone. */
 export function saveExercise(e: Omit<Exercise, 'custom'>) {
@@ -741,7 +862,7 @@ export function deleteRoutine(id: string) {
   heartbeat()
 }
 
-export function setSettings(patch: Partial<Pick<Profile, 'unit' | 'weeklyGoal' | 'effort' | 'activePlanId'>>) {
+export function setSettings(patch: Partial<Pick<Profile, 'unit' | 'weeklyGoal' | 'effort' | 'heatmap' | 'activePlanId'>>) {
   setDoc(gymRef(me()), patch, { merge: true }).catch(fail)
   heartbeat()
 }
@@ -753,9 +874,6 @@ export function renameDevice(name: string) {
 }
 
 /* ---------- derived stats ---------- */
-
-export const volume = (exercises: ExerciseLog[]) =>
-  exercises.reduce((t, e) => t + e.sets.reduce((s, x) => s + (x.done !== false ? x.weight * x.reps : 0), 0), 0)
 
 const DAY = 86_400_000
 const startOfDay = (t: number) => new Date(t).setHours(0, 0, 0, 0)

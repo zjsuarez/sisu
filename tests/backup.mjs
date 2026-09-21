@@ -66,7 +66,7 @@ const uid = await ev("JSON.parse(localStorage[Object.keys(localStorage).find(k =
 // gym data
 await ev("location.hash = '#/workouts'")
 await sleep(1200)
-await ev("[...document.querySelectorAll('button')].find(b => b.textContent.replace(/\\s+/g,' ').trim() === 'Start with Push / Pull / Legs')?.click()")
+await ev("[...document.querySelectorAll('button')].find(b => b.textContent.replace(/\\s+/g,' ').trim() === 'Push / Pull / Legs')?.click()")
 await sleep(2500)
 
 // pretend the schedule app and the money app already hold data

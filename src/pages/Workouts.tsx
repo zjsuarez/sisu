@@ -6,7 +6,7 @@ import { newId, seedStarterPlan, startSession, useStore, type Plan, type Routine
 import { PlanEditor, planStats, planSummary, RoutineRow } from '../plans'
 import { Block, btn, Page, Sheet, Tap } from '../ui'
 
-const blankPlan = (): Plan => ({ id: newId(), name: '', routineIds: [], schedule: null, defaultStart: null, defaultMinutes: null, createdAt: Date.now() })
+const blankPlan = (): Plan => ({ id: newId(), name: '', routineIds: [], schedule: null, defaultStart: null, defaultMinutes: null, generatedThrough: null, createdAt: Date.now() })
 
 export default function Workouts() {
   const { plans, routines, sessions, profile, active, importPending } = useStore()

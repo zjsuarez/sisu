@@ -1,6 +1,6 @@
 # Unified Firebase schema: Sisu + Schedule
 
-**Status: draft v4.2** (adds `apps/gym/modifiers` and variant exercise ids; both invisible to the schedule app). Previously v4.1 — v4 plus the three rules the schedule agent asked to have pinned down (times are both-or-neither, sessions always have times, editing a generated slot un-generates it). v4 was v3.1 plus the app the user actually specified: an exercise library, plans, per-set rep targets, effort (RIR/RPE), and optional times on a planned day. v1-v3 were written by the Sisu agent (`gymapp-ab`) and reviewed by the schedule agent across four rounds; v3.1 is what is deployed and working today.
+**Status: draft v4.3** (Sisu now writes the parts of v4 it had only declared: untimed slots, `planId`/`generated` on generated days, plus two fields of its own). v4.2 added `apps/gym/modifiers` and variant exercise ids; both invisible to the schedule app. Previously v4.1 — v4 plus the three rules the schedule agent asked to have pinned down (times are both-or-neither, sessions always have times, editing a generated slot un-generates it). v4 was v3.1 plus the app the user actually specified: an exercise library, plans, per-set rep targets, effort (RIR/RPE), and optional times on a planned day. v1-v3 were written by the Sisu agent (`gymapp-ab`) and reviewed by the schedule agent across four rounds; v3.1 is what is deployed and working today.
 
 **What v4 changes, and who it touches:**
 - **Breaking for the schedule app:** a planned day may now have **no time** (`start`/`end` are nullable). The user's default is "no assigned time".
@@ -31,12 +31,13 @@ Project `scheduleproject-8f615`, database `(default)`.
 ## 2. `apps/gym` (owner: Sisu)
 
 ```
-users/{uid}/apps/gym                     { unit: 'kg'|'lb', weeklyGoal: number,
-                                           effort: 'rir'|'rpe'|'none', activePlanId: string|null }
+users/{uid}/apps/gym                     { unit: 'kg'|'lb', weeklyGoal: number, effort: 'rir'|'rpe'|'none',
+                                           heatmap: 'time'|'sets'|'volume'|'plain', activePlanId: string|null }
 users/{uid}/apps/gym/exercises/{id}      { name, muscle: MuscleId, secondary: MuscleId[], description: string|null }
 users/{uid}/apps/gym/modifiers/{id}      { label }                                  <- the user's own modifiers
 users/{uid}/apps/gym/plans/{id}          { name, routineIds: string[], schedule: WeeklySchedule|null,
-                                           defaultStart: 'HH:MM'|null, defaultMinutes: number|null, createdAt: Timestamp }
+                                           defaultStart: 'HH:MM'|null, defaultMinutes: number|null,
+                                           generatedThrough: 'YYYY-MM-DD'|null, createdAt: Timestamp }
 users/{uid}/apps/gym/routines/{id}       { name, planId: string|null, muscles: MuscleId[],
                                            exercises: RoutineExercise[], createdAt?: Timestamp }
 users/{uid}/apps/gym/sessions/{id}       { date, start, end, routineId: string|null, planId: string|null, title,
@@ -60,7 +61,8 @@ type LoggedExercise = { exerciseId: string, name: string, sets: LoggedSet[] }
 **`apps/gym` doc**
 - May not exist; every reader falls back to defaults (`kg`, `4`, `rir`, no active plan).
 - `effort` decides what the session logger asks for. It's a display/input setting, never a rewrite of history — see sets.
-- `activePlanId` — exactly one plan is active at a time (the user's decision).
+- `activePlanId` — exactly one plan is active at a time (the user's decision). Switching plans clears the previous plan's unfulfilled generated days, so two patterns never fight over the same week.
+- `heatmap` — which measure shades Sisu's year grid (Calendar tab). Display only, nothing else reads it.
 
 **Exercises and modifiers**
 - **An exercise id may be a variant**: `bench-press~dumbbell+2ct-pause` is a base id, `~`, then modifier ids joined by `+`, in a fixed order so the same set of modifiers always produces the same id. A variant is never stored anywhere; it has its own history because logged sets point at ids. Rules and the catalogue: `CATALOGUE.md`.
@@ -75,7 +77,8 @@ type LoggedExercise = { exerciseId: string, name: string, sets: LoggedSet[] }
 - A plan is a name, its routines, and **either a weekly pattern or nothing**. Rotations and N-day cycles were considered and dropped: they need an anchor date, re-projection, and pinning to survive manual edits, and they make the shared calendar rewrite itself.
 - `schedule: null` = the plan is just a set of routines. You plan individual days by hand, in either app. This is the user's own case, since their shifts rotate weekly.
 - A weekly pattern generates real slot documents 8 weeks ahead, topped up whenever Sisu opens, so the schedule app stays a dumb reader. Regeneration only ever touches **future** slots with `generated: true` and no `sessionId`. Slots created in either app by hand, and generated slots that were later edited, both carry `generated: false` and are never overwritten.
-- `defaultStart`/`defaultMinutes` may be null: "no assigned time".
+- `defaultStart`/`defaultMinutes` may be null: "no assigned time", which is the default.
+- `generatedThrough` is the last date the pattern has filled. It only moves forward, so deleting a generated day doesn't resurrect it on the next launch. Changing the pattern resets it to null and re-lays the future days.
 
 **Routines**
 - `muscles` is derived from the main muscles of its exercises when the routine is saved. It stays stored because the schedule app reads it and because it keeps the document self-describing.
@@ -99,6 +102,7 @@ type LoggedExercise = { exerciseId: string, name: string, sets: LoggedSet[] }
 - `routineId` may be null (plain "gym"); `title` is the label only when there's no routine, and stays null when `routineId` is set.
 - `sessionId` links the plan to the workout that fulfilled it: the slot the workout started from, else the earliest unfulfilled slot the same day. **Missed** = a past slot whose `sessionId` is still null; it is derived, never stored.
 - `planId` + `generated` say where the slot came from, so a weekly pattern can be regenerated without destroying days you placed by hand.
+- **Generated slots use a derived id**, `gen-{planId}-{date}` (the one documented exception to random ids): re-running a pattern overwrites the same document instead of racing itself into duplicates. Every other slot keeps a uuid.
 - **Growth:** one document per planned workout, roughly 200 a year. Fulfilled past slots are dead weight, but deleting them on completion risks a zombie document if the other app writes the same slot moments later. If it ever matters, prune fulfilled slots older than 30 days.
 
 **Devices**

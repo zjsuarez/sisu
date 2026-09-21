@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Check, Play, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { deletePlan, savePlan, setActivePlan, useStore, type Plan, type Routine, type Session } from './store'
+import { deletePlan, savePlan, setActivePlan, useStore, WEEKDAYS, type Plan, type Routine, type Session, type WeeklySchedule } from './store'
 import { btn, fmtShortDay, Tap } from './ui'
 
 const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent'
@@ -48,6 +48,58 @@ export function RoutineRow({ routine, onStart }: { routine: Routine; onStart: (r
   )
 }
 
+const EMPTY_WEEK: WeeklySchedule = { mon: null, tue: null, wed: null, thu: null, fri: null, sat: null, sun: null }
+
+/** Which routine falls on which weekday. Tapping a day cycles through the plan's routines. */
+function Weekly({ draft, set }: { draft: Plan; set: (patch: Partial<Plan>) => void }) {
+  const { routines } = useStore()
+  const mine = draft.routineIds.map((id) => routines.find((r) => r.id === id)).filter((r): r is Routine => !!r)
+  const week = draft.schedule ?? EMPTY_WEEK
+
+  const cycle = (day: keyof WeeklySchedule) => {
+    const next = mine[mine.findIndex((r) => r.id === week[day]) + 1]?.id ?? null // past the last one = rest day
+    const updated = { ...week, [day]: next }
+    set({ schedule: Object.values(updated).some(Boolean) ? updated : null })
+  }
+
+  return (
+    <>
+      <p className="pt-2 text-xs font-semibold tracking-widest text-muted uppercase">Every week</p>
+      {mine.length === 0 ? (
+        <p className="text-sm text-muted">Pick routines first</p>
+      ) : (
+        <div className="grid grid-cols-7 gap-1">
+          {WEEKDAYS.map(({ id, label }) => {
+            const r = mine.find((x) => x.id === week[id])
+            return (
+              <Tap key={id} onClick={() => cycle(id)} aria-label={label} className={`rounded-xl px-1 py-2 ${r ? 'bg-accent/10 text-accent' : 'bg-surface-2 text-zinc-600'}`}>
+                <span className="block text-[10px] font-semibold">{label[0]}</span>
+                <span className="block truncate text-[9px]">{r?.name ?? '–'}</span>
+              </Tap>
+            )
+          })}
+        </div>
+      )}
+
+      {draft.schedule && (
+        <div className="flex items-center gap-2">
+          <Tap onClick={() => set({ defaultStart: null, defaultMinutes: null })} className={pill(!draft.defaultStart)}>
+            No time
+          </Tap>
+          <input
+            type="time"
+            value={draft.defaultStart ?? '18:00'}
+            onChange={(e) => e.target.value && set({ defaultStart: e.target.value, defaultMinutes: draft.defaultMinutes ?? 75 })}
+            className={`rounded-full border px-4 py-2 text-sm outline-none ${draft.defaultStart ? 'border-accent bg-accent/10 text-accent' : 'border-line text-zinc-500'}`}
+          />
+        </div>
+      )}
+    </>
+  )
+}
+
+const pill = (on: boolean) => `rounded-full border px-4 py-2 text-sm ${on ? 'border-accent bg-accent/10 text-accent' : 'border-line text-zinc-400'}`
+
 /** Name and which routines belong to it. Used when creating one and from inside a plan. */
 export function PlanEditor({ plan, onClose, onDeleted }: { plan: Plan; onClose: () => void; onDeleted?: () => void }) {
   const { routines, plans, profile } = useStore()
@@ -59,6 +111,8 @@ export function PlanEditor({ plan, onClose, onDeleted }: { plan: Plan; onClose: 
   return (
     <div className="space-y-4 pb-4">
       <input className={field} placeholder="Plan name" value={draft.name} onChange={(e) => set({ name: e.target.value })} autoFocus={isNew} />
+
+      <Weekly draft={draft} set={set} />
 
       <p className="pt-2 text-xs font-semibold tracking-widest text-muted uppercase">Routines</p>
       {routines.length === 0 ? (

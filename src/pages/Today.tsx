@@ -44,7 +44,7 @@ export default function Today() {
       {/* hero */}
       <Block className="card relative overflow-hidden p-6">
         <p className="relative text-xs font-semibold tracking-widest text-muted uppercase">
-          {active ? 'In progress' : todaySlot ? `Today · ${todaySlot.start}` : 'Up next'}
+          {active ? 'In progress' : todaySlot ? (todaySlot.start ? `Today · ${todaySlot.start}` : 'Today') : 'Up next'}
         </p>
         <h2 className="relative mt-1 font-display text-5xl font-bold tracking-tight">{active?.routine ?? next?.name ?? 'Rest day'}</h2>
         <p className="relative mt-1 text-sm text-muted">

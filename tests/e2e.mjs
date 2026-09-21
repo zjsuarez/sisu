@@ -327,6 +327,68 @@ await phone.ev("location.hash = '#/workouts'")
 await sleep(1500)
 await phone.shot('e2e-workouts-list')
 
+// ---------------------------------------------------------------- weekly pattern -> calendar
+await phone.ev(`location.hash = '#/plan/${planId}'`)
+await sleep(1500)
+await phone.ev(`document.querySelector('[aria-label="Edit Push Pull Legs"]').click()`)
+await sleep(1200)
+log('  mon:', await phone.ev(dialogEval(`const b = d.querySelector('[aria-label="Mon"]'); if (!b) return 'NOT FOUND'; b.click(); return 'clicked'`)))
+await sleep(500)
+log('  thu:', await phone.ev(dialogEval(`const b = d.querySelector('[aria-label="Thu"]'); if (!b) return 'NOT FOUND'; b.click(); return 'clicked'`)))
+await sleep(500)
+log('  thu again:', await phone.ev(dialogEval(`d.querySelector('[aria-label="Thu"]').click(); return 'clicked'`)))
+await sleep(500)
+await phone.shot('e2e-weekly')
+log('  save plan:', await phone.ev(dialogClick('Save')))
+await sleep(3000)
+
+const generated = (await listDocs('slots')).map(plain).filter((s) => s.generated === true)
+check('the weekly pattern fills the calendar ahead', generated.length >= 8, `${generated.length} generated slots`)
+check('generated days carry the plan and a routine', generated.every((s) => s.planId === planId && !!s.routineId), JSON.stringify(generated[0] ?? {}))
+check('and have no time on them', generated.every((s) => s.start === null && s.end === null), JSON.stringify(generated[0] ?? {}))
+const weekdays = new Set(generated.map((s) => new Date(`${s.date}T00:00`).getDay()))
+check('only on the two weekdays picked', weekdays.size === 2 && [...weekdays].every((d) => d === 1 || d === 4), JSON.stringify([...weekdays]))
+const firstTwo = generated.map((s) => s.routineId).filter((id, i, a) => a.indexOf(id) === i)
+check('Monday and Thursday get different routines', firstTwo.length === 2, JSON.stringify(firstTwo))
+
+await phone.ev("location.hash = '#/calendar'")
+await sleep(2500)
+const cal = await phone.ev(body)
+check('the calendar screen opens on this month', new RegExp(new Date().toLocaleDateString('en', { month: 'long' })).test(cal), cal.slice(0, 80).split('\n').join(' | '))
+check('planned days are labelled with their routine', /Push/.test(cal), cal.slice(0, 200).split('\n').join(' | '))
+await phone.shot('e2e-calendar')
+
+// a day opens its sheet, and the logged workout can be deleted from there
+await phone.ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.replace(/\\s+/g, ' ').trim().startsWith('${new Date().getDate()}Push'))?.click()`)
+await sleep(1200)
+await phone.shot('e2e-calendar-day')
+check('tapping a day opens it', !!(await phone.ev(`!!document.querySelector('[role="dialog"]')`)))
+await phone.ev(closeSheet())
+await sleep(800)
+
+// turning the pattern off clears the days it made
+await phone.ev(`location.hash = '#/plan/${planId}'`)
+await sleep(1500)
+await phone.ev(`document.querySelector('[aria-label="Edit Push Pull Legs"]').click()`)
+await sleep(1200)
+const restDay = async (day) => {
+  for (let i = 0; i < 5; i++) {
+    const text = await phone.ev(dialogEval(`const b = d.querySelector('[aria-label="${day}"]'); return b ? b.textContent.trim() : 'NOT FOUND'`))
+    if (text.endsWith('–')) return `${day} clear after ${i}`
+    await phone.ev(dialogEval(`d.querySelector('[aria-label="${day}"]').click(); return 'clicked'`))
+    await sleep(400)
+  }
+  return `${day} STILL SET`
+}
+log(' ', await restDay('Mon'))
+log(' ', await restDay('Thu'))
+log('  save plan:', await phone.ev(dialogClick('Save')))
+await sleep(3000)
+const leftovers = (await listDocs('slots')).map(plain).filter((s) => s.generated === true && !s.sessionId)
+check('dropping the pattern clears the days it made', leftovers.length === 0, `${leftovers.length} left`)
+const kept = (await listDocs('slots')).map(plain).filter((s) => !s.generated)
+check('and leaves the ones planned by hand alone', kept.some((s) => s.start === '19:00'), JSON.stringify(kept.map((s) => s.date)))
+
 // ---------------------------------------------------------------- second device (desktop)
 const desktop = await launch(9502, 'desktop')
 await desktop.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false })

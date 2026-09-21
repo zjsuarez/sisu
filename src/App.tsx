@@ -1,10 +1,12 @@
+import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ChartColumn, Dumbbell, House, Play, User } from 'lucide-react'
+import { CalendarDays, ChartColumn, Dumbbell, House, Play, User } from 'lucide-react'
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { useStore } from './store'
+import { ensurePattern, useStore } from './store'
 import { spring } from './ui'
 import Today from './pages/Today'
 import Workouts from './pages/Workouts'
+import CalendarScreen from './pages/Calendar'
 import Exercises from './pages/Exercises'
 import RoutineEditor from './pages/Routine'
 import PlanScreen from './pages/Plan'
@@ -16,14 +18,20 @@ import SignIn, { Splash } from './pages/SignIn'
 const TABS = [
   { to: '/', label: 'Today', icon: House },
   { to: '/workouts', label: 'Workouts', icon: Dumbbell },
+  { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/progress', label: 'Progress', icon: ChartColumn },
   { to: '/profile', label: 'Profile', icon: User },
 ]
 
 export default function App() {
   const location = useLocation()
-  const { user } = useStore()
+  const { user, plans, profile } = useStore()
   const fullScreen = location.pathname === '/session' || location.pathname.startsWith('/routine/')
+
+  // keep the active plan's weekly pattern filled as the horizon moves; a no-op once it is
+  useEffect(() => {
+    if (user) ensurePattern()
+  }, [user, plans, profile.activePlanId])
 
   // undefined = still restoring the saved sign-in from this device; that works offline, so no timeout to the sign-in screen
   if (user === undefined) return <Splash />
@@ -35,6 +43,7 @@ export default function App() {
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<Today />} />
           <Route path="/workouts" element={<Workouts />} />
+          <Route path="/calendar" element={<CalendarScreen />} />
           <Route path="/exercises" element={<Exercises />} />
           <Route path="/plan/:id" element={<PlanScreen />} />
           <Route path="/routine/:id" element={<RoutineEditor />} />
