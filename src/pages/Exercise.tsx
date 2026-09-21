@@ -123,16 +123,17 @@ export default function Exercise() {
 
 /** e1RM over time. Plain SVG — a chart library for one line would be a dependency for nothing. */
 function Chart({ pts, unit, convert }: { pts: ReturnType<typeof points>; unit: string; convert: (v: number) => number }) {
-  if (pts.length < 2) return <p className="mt-6 text-sm text-muted">Log it once more to see the line move.</p>
-
   const W = 100
   const H = 42
-  const values = pts.map((p) => p.e1rm)
+  // one session still draws: a flat line across, so the card never sits empty waiting for a second
+  const series = pts.length === 1 ? [pts[0], pts[0]] : pts
+  const values = series.map((p) => p.e1rm)
   const lo = Math.min(...values)
   const hi = Math.max(...values)
-  const x = (i: number) => (i / (pts.length - 1)) * W
-  const y = (v: number) => H - 4 - ((v - lo) / (hi - lo || 1)) * (H - 10)
-  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(2)},${y(p.e1rm).toFixed(2)}`).join(' ')
+  const flat = hi - lo < 0.001
+  const x = (i: number) => (i / (series.length - 1)) * W
+  const y = (v: number) => (flat ? H / 2 : H - 4 - ((v - lo) / (hi - lo)) * (H - 10))
+  const line = series.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(2)},${y(p.e1rm).toFixed(2)}`).join(' ')
 
   return (
     <div className="mt-5">
@@ -161,15 +162,15 @@ function Chart({ pts, unit, convert }: { pts: ReturnType<typeof points>; unit: s
           strokeLinecap="round"
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         />
-        <circle cx={x(pts.length - 1)} cy={y(pts[pts.length - 1].e1rm)} r={2} fill="var(--color-accent)" vectorEffect="non-scaling-stroke" />
+        <circle cx={x(series.length - 1)} cy={y(series[series.length - 1].e1rm)} r={2} fill="var(--color-accent)" vectorEffect="non-scaling-stroke" />
       </svg>
-      <div className="flex justify-between text-[10px] text-zinc-600">
+      <div className={`flex text-[10px] text-zinc-600 ${pts.length === 1 ? 'justify-center' : 'justify-between'}`}>
         <span>{fmtDay(pts[0].at)}</span>
-        <span>{fmtDay(pts[pts.length - 1].at)}</span>
+        {pts.length > 1 && <span>{fmtDay(pts[pts.length - 1].at)}</span>}
       </div>
     </div>
   )
