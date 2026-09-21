@@ -16,6 +16,20 @@ export const inReserve = (set: Logged) =>
 
 export const e1rm = (set: Logged) => (set.reps > 0 && set.weight > 0 ? set.weight * (1 + (set.reps + inReserve(set)) / 30) : 0)
 
+/**
+ * A streak survives rest days: it only ends once `maxGap` days have passed without training,
+ * counting from the last day you went. Days are day-start timestamps; two workouts in one day
+ * count once. Returns how many training days the current run holds.
+ */
+export function streakOf(dayStarts: number[], today: number, maxGap = 4) {
+  const days = [...new Set(dayStarts)].sort((a, b) => b - a)
+  const gap = (later: number, earlier: number) => Math.round((later - earlier) / 86_400_000) // rounded: DST-safe
+  if (!days.length || gap(today, days[0]) >= maxGap) return 0
+  let streak = 1
+  for (let i = 1; i < days.length && gap(days[i - 1], days[i]) < maxGap; i++) streak++
+  return streak
+}
+
 /** the set that says the most about a session: the highest e1RM in it */
 export const bestSet = (sets: Logged[]) => sets.reduce<Logged | null>((best, s) => (!best || e1rm(s) > e1rm(best) ? s : best), null)
 

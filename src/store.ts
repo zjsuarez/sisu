@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore'
 import { auth, db } from './firebase'
 import { addDays, addMinutes, durationSec, volume, weekdayOf, ymd } from './calendar'
+import { streakOf } from './progress'
 
 import { BUILT_IN, BUILT_IN_MODIFIERS, canonicalExerciseId, resolveExercise, type Exercise, type Modifier, type MuscleId } from './exercises'
 
@@ -90,7 +91,7 @@ export type Active = {
 export type Effort = 'rir' | 'rpe' | 'none'
 /** what the year grid shades by */
 export type Heatmap = 'time' | 'sets' | 'volume' | 'plain'
-export type Profile = { name: string; unit: 'kg' | 'lb'; weeklyGoal: number; effort: Effort; heatmap: Heatmap; activePlanId: string | null }
+export type Profile = { name: string; unit: 'kg' | 'lb'; effort: Effort; heatmap: Heatmap; activePlanId: string | null }
 export type Sync = { waiting: number; inSync: boolean; online: boolean; error: string | null }
 export type State = {
   user: User | null | undefined // undefined while the saved sign-in is being restored
@@ -131,7 +132,7 @@ const SEED_ROUTINES: { name: string; exercises: RoutineExercise[] }[] = [
   { name: 'Legs', exercises: [seedEx('back-squat', 4, 6), seedEx('romanian-deadlift', 3, 10), seedEx('leg-press', 3, 12), seedEx('calf-raise~standing', 4, 15)] },
 ]
 
-const DEFAULT_SETTINGS = { unit: 'kg' as const, weeklyGoal: 4, effort: 'rir' as const, heatmap: 'time' as const, activePlanId: null }
+const DEFAULT_SETTINGS = { unit: 'kg' as const, effort: 'rir' as const, heatmap: 'time' as const, activePlanId: null }
 
 export const newId = () => crypto.randomUUID()
 
@@ -310,7 +311,6 @@ function listen(user: User) {
         profile: {
           name: firstName(user),
           unit: snap.get('unit') ?? DEFAULT_SETTINGS.unit,
-          weeklyGoal: snap.get('weeklyGoal') ?? DEFAULT_SETTINGS.weeklyGoal,
           effort: snap.get('effort') ?? DEFAULT_SETTINGS.effort,
           heatmap: snap.get('heatmap') ?? DEFAULT_SETTINGS.heatmap,
           activePlanId: snap.get('activePlanId') ?? null,
@@ -876,7 +876,7 @@ export function deleteRoutine(id: string) {
   heartbeat()
 }
 
-export function setSettings(patch: Partial<Pick<Profile, 'unit' | 'weeklyGoal' | 'effort' | 'heatmap' | 'activePlanId'>>) {
+export function setSettings(patch: Partial<Pick<Profile, 'unit' | 'effort' | 'heatmap' | 'activePlanId'>>) {
   setDoc(gymRef(me()), patch, { merge: true }).catch(fail)
   heartbeat()
 }
@@ -889,9 +889,7 @@ export function renameDevice(name: string) {
 
 /* ---------- derived stats ---------- */
 
-const DAY = 86_400_000
 const startOfDay = (t: number) => new Date(t).setHours(0, 0, 0, 0)
-const prevDay = (dayStart: number) => startOfDay(dayStart - DAY / 2) // DST-safe step back
 export const startOfWeek = (t: number) => {
   const d = new Date(startOfDay(t))
   return d.setDate(d.getDate() - ((d.getDay() + 6) % 7)) // Monday
@@ -900,16 +898,10 @@ export const startOfWeek = (t: number) => {
 export function stats(sessions: Session[], now = Date.now()) {
   const week = startOfWeek(now)
   const thisWeek = sessions.filter((x) => x.at >= week)
-
-  // streak = consecutive days with a session, counting back from today (or yesterday)
   const days = new Set(sessions.map((x) => startOfDay(x.at)))
-  let cursor = startOfDay(now)
-  if (!days.has(cursor)) cursor = prevDay(cursor)
-  let streak = 0
-  while (days.has(cursor)) {
-    streak++
-    cursor = prevDay(cursor)
-  }
+
+  // a streak is days trained without ever letting four days pass; see streakOf
+  const streak = streakOf(sessions.map((x) => startOfDay(x.at)), startOfDay(now))
 
   const weeks = Array.from({ length: 8 }, (_, i) => {
     const from = new Date(week).setDate(new Date(week).getDate() - 7 * (7 - i))

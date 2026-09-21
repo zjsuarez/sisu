@@ -31,7 +31,7 @@ Project `scheduleproject-8f615`, database `(default)`.
 ## 2. `apps/gym` (owner: Sisu)
 
 ```
-users/{uid}/apps/gym                     { unit: 'kg'|'lb', weeklyGoal: number, effort: 'rir'|'rpe'|'none',
+users/{uid}/apps/gym                     { unit: 'kg'|'lb', effort: 'rir'|'rpe'|'none',
                                            heatmap: 'time'|'sets'|'volume'|'plain', activePlanId: string|null }
 users/{uid}/apps/gym/exercises/{id}      { name, muscle: MuscleId, secondary: MuscleId[], description: string|null }
 users/{uid}/apps/gym/modifiers/{id}      { label }                                  <- the user's own modifiers
@@ -59,7 +59,7 @@ type LoggedExercise = { exerciseId: string, name: string, sets: LoggedSet[] }
 ### Field notes
 
 **`apps/gym` doc**
-- May not exist; every reader falls back to defaults (`kg`, `4`, `rir`, no active plan).
+- May not exist; every reader falls back to defaults (`kg`, `rir`, no active plan). A `weeklyGoal` left over from v4.2 is ignored and may be deleted.
 - `effort` decides what the session logger asks for. It's a display/input setting, never a rewrite of history — see sets.
 - `activePlanId` — exactly one plan is active at a time (the user's decision). Switching plans clears the previous plan's unfulfilled generated days, so two patterns never fight over the same week.
 - `heatmap` — which measure shades Sisu's year grid (Calendar tab). Display only, nothing else reads it.

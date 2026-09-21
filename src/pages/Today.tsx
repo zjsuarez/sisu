@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { fromKg, muscleLabel, startSession, stats, useStore, volume, ymd } from '../store'
 import { Plan } from '../slots'
 import { SyncBadge } from '../sync'
-import { Block, Counter, fmtCompact, fmtDay, fmtDuration, Page, Ring, Tap } from '../ui'
+import { Block, Counter, fmtCompact, fmtDay, fmtDuration, Page, Tap } from '../ui'
 
 const greeting = () => {
   const h = new Date().getHours()
@@ -55,39 +55,10 @@ export default function Today() {
         </Tap>
       </Block>
 
-      {/* weekly goal */}
-      <Block className="card flex items-center gap-4 p-5">
-        <Ring value={st.thisWeek / profile.weeklyGoal} size={96}>
-          <div className="text-center">
-            <p className="font-display text-3xl font-bold">
-              {st.thisWeek}
-              <span className="text-lg text-zinc-500">/{profile.weeklyGoal}</span>
-            </p>
-          </div>
-        </Ring>
-        <div className="min-w-0 flex-1">
-          <p className="font-display text-lg font-semibold">Weekly goal</p>
-          <p className="text-sm text-muted">{st.thisWeek >= profile.weeklyGoal ? 'Done' : `${profile.weeklyGoal - st.thisWeek} to go`}</p>
-          <div className="mt-3 grid grid-cols-7 gap-1">
-            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-              <motion.div
-                key={i}
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.3 + i * 0.04, type: 'spring', stiffness: 500, damping: 25 }}
-                className={`grid aspect-square place-items-center rounded-md text-[10px] font-bold ${st.weekDays[i] ? 'bg-accent text-ink' : 'bg-surface-2 text-zinc-500'}`}
-              >
-                {d}
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </Block>
-
       {/* stats */}
       <Block className="grid grid-cols-3 gap-3">
         {[
-          { icon: Flame, label: 'Streak', value: st.streak, suffix: 'd' },
+          { icon: Flame, label: 'Streak', value: st.streak, suffix: '' },
           { icon: Trophy, label: 'Workouts', value: sessions.length, suffix: '' },
           { icon: Timer, label: `Week ${profile.unit}`, value: fromKg(st.weekVolume, profile.unit), suffix: '' },
         ].map(({ icon: Icon, label, value, suffix }) => (

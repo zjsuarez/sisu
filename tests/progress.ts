@@ -1,5 +1,5 @@
 /** Estimated 1RM and the shape of an exercise's progress. No Firebase, no DOM. */
-import { bestSet, e1rm, inReserve, points, summary } from '../src/progress.ts'
+import { bestSet, e1rm, inReserve, points, streakOf, summary } from '../src/progress.ts'
 
 let failed = 0
 const check = (what: string, ok: boolean, got?: unknown) => {
@@ -48,6 +48,21 @@ check('and the heaviest weight ever', sum.heaviest.set.weight === 70, sum.heavie
 check('and the change since last time', sum.change !== null && sum.change > 0, sum.change)
 check('one session has nothing to compare with', summary(points([history[1]]))?.change === null)
 check('no history, no summary', summary([]) === null)
+
+/* streaks: a rest day is fine, four days off is not */
+const day = 86_400_000
+const today = new Date(2026, 8, 21).getTime()
+const ago = (n: number) => today - n * day
+check('no workouts, no streak', streakOf([], today) === 0)
+check('training today starts one', streakOf([ago(0)], today) === 1, streakOf([ago(0)], today))
+check('yesterday still counts', streakOf([ago(1)], today) === 1)
+check('three days off keeps it alive', streakOf([ago(3)], today) === 1, streakOf([ago(3)], today))
+check('four days off ends it', streakOf([ago(4)], today) === 0, streakOf([ago(4)], today))
+check('a run of days adds up', streakOf([ago(0), ago(2), ago(5), ago(7)], today) === 4, streakOf([ago(0), ago(2), ago(5), ago(7)], today))
+check('it stops at the first four-day hole', streakOf([ago(0), ago(2), ago(6), ago(7)], today) === 2, streakOf([ago(0), ago(2), ago(6), ago(7)], today))
+check('two workouts in one day count once', streakOf([ago(1), ago(1), ago(3)], today) === 2, streakOf([ago(1), ago(1), ago(3)], today))
+check('an old run that already died stays dead', streakOf([ago(10), ago(12)], today) === 0)
+
 
 console.log(failed ? `\n${failed} failed` : '\nall good')
 process.exit(failed ? 1 : 0)

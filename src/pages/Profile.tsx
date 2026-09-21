@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import { DatabaseBackup, Download, LogOut, Minus, Plus, Share, Smartphone } from 'lucide-react'
+import { DatabaseBackup, Download, LogOut, Share, Smartphone } from 'lucide-react'
 import { deviceName, fullBackup, installed, renameDevice, setSettings, signOut, useStore, type Effort } from '../store'
 import { Devices } from '../sync'
 import { Block, btn, Page, spring, Tap } from '../ui'
@@ -99,23 +99,6 @@ export default function Profile() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div>
-            <p className={label}>Weekly goal</p>
-            <p className="text-sm text-muted">Per week</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Tap aria-label="Decrease goal" onClick={() => setSettings({ weeklyGoal: Math.max(1, profile.weeklyGoal - 1) })} className="grid size-10 place-items-center rounded-full bg-surface-2">
-              <Minus size={16} />
-            </Tap>
-            <motion.span key={profile.weeklyGoal} initial={{ scale: 1.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-6 text-center font-display text-2xl font-bold">
-              {profile.weeklyGoal}
-            </motion.span>
-            <Tap aria-label="Increase goal" onClick={() => setSettings({ weeklyGoal: Math.min(7, profile.weeklyGoal + 1) })} className="grid size-10 place-items-center rounded-full bg-surface-2">
-              <Plus size={16} />
-            </Tap>
-          </div>
-        </div>
       </Block>
 
       <Block className="space-y-3">

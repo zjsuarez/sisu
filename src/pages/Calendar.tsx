@@ -73,9 +73,6 @@ export default function Calendar() {
           <span className="flex items-center gap-1.5 rounded-full bg-surface-2 px-2.5 py-1 text-xs">
             <Flame size={12} /> {st.streak}
           </span>
-          <span className="rounded-full bg-surface-2 px-2.5 py-1 text-xs">
-            {st.thisWeek} / {profile.weeklyGoal}
-          </span>
         </>
       }
       action={
