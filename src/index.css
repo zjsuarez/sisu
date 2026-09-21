@@ -34,6 +34,11 @@ body {
   background: var(--color-surface);
 }
 
+/* the floating tab bar is already an overlay: it sits nearer the edge than content does */
+@utility safe-bottom-tight {
+  padding-bottom: max(calc(env(safe-area-inset-bottom) - 0.5rem), 0.25rem);
+}
+
 @utility safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
 }

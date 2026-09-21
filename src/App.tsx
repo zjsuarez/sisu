@@ -86,7 +86,7 @@ function TabBar() {
       animate={{ y: 0 }}
       exit={{ y: 120 }}
       transition={spring}
-      className="safe-bottom absolute inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4"
+      className="safe-bottom-tight absolute inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4"
     >
       <AnimatePresence>
         {active && (
@@ -113,7 +113,7 @@ function TabBar() {
         )}
       </AnimatePresence>
 
-      <div className="mb-2 flex rounded-[1.75rem] bg-surface/90 p-1.5 backdrop-blur-xl">
+      <div className="flex rounded-[1.75rem] bg-surface/90 p-1.5 backdrop-blur-xl">
         {TABS.map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={to} end className="relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium">
             {({ isActive }) => (
