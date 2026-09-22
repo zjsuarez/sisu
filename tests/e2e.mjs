@@ -90,7 +90,7 @@ check('sign-in screen shown when signed out', (await phone.ev(body)).includes('C
 
 await phone.ev('window.__signIn()')
 await sleep(3000)
-check('signed in, app shown', (await phone.ev(body)).includes('Planned'))
+check('signed in, app shown', /(Up next|In progress|Rest day|Today ·)/i.test(await phone.ev(body)), (await phone.ev(body)).split('\n').filter(Boolean).slice(0, 5).join(' | '))
 UID = await phone.ev("JSON.parse(localStorage[Object.keys(localStorage).find(k => k.startsWith('firebase:authUser'))]).uid")
 log('  uid:', UID)
 
@@ -371,9 +371,14 @@ await phone.shot('e2e-summary')
 log('  done:', await phone.ev(click('Done')))
 await sleep(2000)
 
+await phone.ev("location.hash = '#/progress'")
+await sleep(1800)
 const offlineBody = await phone.ev(body)
-check('offline: workout shows in the app straight away', offlineBody.includes('Recent') && offlineBody.includes('Push'))
-check('offline: badge says it is waiting to upload', /\d+ waiting/i.test(offlineBody), offlineBody.split('\n').find((l) => /waiting|Offline|Synced/i.test(l)))
+check('offline: workout shows in the app straight away', /History/.test(offlineBody) && /Push/.test(offlineBody), offlineBody.split('\n').filter(Boolean).slice(0, 6).join(' | '))
+await phone.ev("location.hash = '#/'")
+await sleep(1500)
+const offlineHome = await phone.ev(body)
+check('offline: badge says it is waiting to upload', /\d+ waiting/i.test(offlineHome), offlineHome.split('\n').find((l) => /waiting|Offline|Synced/i.test(l)))
 check('offline: nothing reached the server yet', (await listDocs('sessions')).length === 0)
 await phone.shot('e2e-offline-today')
 
@@ -381,7 +386,7 @@ await phone.shot('e2e-offline-today')
 await phone.send('Page.reload')
 await sleep(4000)
 const reloaded = await phone.ev(body)
-check('offline: app reopens from cache, still signed in', !reloaded.includes('Continue with Google') && reloaded.includes('Push'))
+check('offline: app reopens from cache, still signed in', !reloaded.includes('Continue with Google') && /(History|Push|Up next|Rest day)/i.test(reloaded), reloaded.split('\n').filter(Boolean).slice(0, 5).join(' | '))
 
 // ---------------------------------------------------------------- back online
 await phone.offline(false)
@@ -395,6 +400,8 @@ check("the plan's time and routine were not overwritten", slot.start === '19:00'
 const devices = (await listDocs('devices')).map(plain)
 check('device registered with a last-synced time', devices.some((d) => d.type === 'phone' && d.lastSyncedAt), JSON.stringify(devices))
 const onlineBody = await phone.ev(body)
+await phone.ev("location.hash = '#/'")
+await sleep(1500)
 check('badge shows synced', /Synced/.test(onlineBody), onlineBody.split('\n').find((l) => /waiting|Offline|Synced/i.test(l)))
 
 // ---------------------------------------------------------------- the plan screen counts it
@@ -501,8 +508,10 @@ await desktop.send('Page.navigate', { url: APP })
 await sleep(2500)
 await desktop.ev('window.__signIn()')
 await sleep(5000)
+await desktop.ev("location.hash = '#/progress'")
+await sleep(2500)
 const deskBody = await desktop.ev(body)
-check('second device sees the workout logged on the phone', deskBody.includes('Push') && /Recent/.test(deskBody))
+check('second device sees the workout logged on the phone', deskBody.includes('Push') && /History/.test(deskBody), deskBody.split('\n').filter(Boolean).slice(0, 6).join(' | '))
 await sleep(3000)
 const devices2 = (await listDocs('devices')).map(plain)
 check(

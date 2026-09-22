@@ -48,6 +48,24 @@ export function newRecords(current: { exerciseId: string; name: string; sets: Lo
     .filter((r): r is NonNullable<typeof r> => !!r)
 }
 
+/**
+ * Records as they were set, newest first: walk the workouts forward keeping the best so far,
+ * and note every time one is beaten. The first log of an exercise counts, same as newRecords.
+ */
+export function recentRecords(sessions: { at: number; exercises: { exerciseId: string; name: string; sets: Logged[] }[] }[], limit = 3) {
+  const best = new Map<string, number>()
+  const out: { at: number; exerciseId: string; name: string; set: Logged; e1rm: number }[] = []
+  for (const s of [...sessions].sort((a, b) => a.at - b.at))
+    for (const e of s.exercises) {
+      const top = bestSet(e.sets)
+      if (top && e1rm(top) > (best.get(e.exerciseId) ?? 0)) {
+        best.set(e.exerciseId, e1rm(top))
+        out.push({ at: s.at, exerciseId: e.exerciseId, name: e.name, set: top, e1rm: e1rm(top) })
+      }
+    }
+  return out.reverse().slice(0, limit)
+}
+
 /** One point per session, oldest first — what a chart needs. Sessions with nothing to measure drop out. */
 export function points(history: { at: number; sets: Logged[] }[]) {
   return history

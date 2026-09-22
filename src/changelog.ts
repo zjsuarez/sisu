@@ -3,11 +3,19 @@
  * this is what the app shows under Profile, and how you tell whether a phone is running the
  * latest build.
  */
-export const VERSION = '1.8.0'
+export const VERSION = '1.9.0'
 
 export type Release = { version: string; date: string; changes: string[] }
 
 export const RELEASES: Release[] = [
+  {
+    version: '1.9.0',
+    date: '2026-09-23',
+    changes: [
+      'The dashboard is yours to build: the pencil adds, reorders and removes widgets',
+      'Widgets: next workout, planned days, training calendar, this week, recent PRs, recent workouts, streak, weekly volume, total sessions, average duration',
+    ],
+  },
   {
     version: '1.8.0',
     date: '2026-09-23',

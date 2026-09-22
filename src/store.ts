@@ -92,7 +92,16 @@ export type Effort = 'rir' | 'rpe' | 'none'
 /** what the year grid shades by */
 export type Heatmap = 'time' | 'sets' | 'volume' | 'plain'
 /** rest: seconds to count down after a set is ticked, or null for no rest timer at all */
-export type Profile = { name: string; unit: 'kg' | 'lb'; effort: Effort; heatmap: Heatmap; rest: number | null; activePlanId: string | null }
+export type Profile = {
+  name: string
+  unit: 'kg' | 'lb'
+  effort: Effort
+  heatmap: Heatmap
+  rest: number | null
+  /** the dashboard, in order. Ids the app no longer knows are ignored, so an old phone still works. */
+  widgets: string[]
+  activePlanId: string | null
+}
 export type Sync = { waiting: number; inSync: boolean; online: boolean; error: string | null }
 export type State = {
   user: User | null | undefined // undefined while the saved sign-in is being restored
@@ -133,7 +142,7 @@ const SEED_ROUTINES: { name: string; exercises: RoutineExercise[] }[] = [
   { name: 'Legs', exercises: [seedEx('back-squat', 4, 6), seedEx('romanian-deadlift', 3, 10), seedEx('leg-press', 3, 12), seedEx('calf-raise~standing', 4, 15)] },
 ]
 
-const DEFAULT_SETTINGS = { unit: 'kg' as const, effort: 'rir' as const, heatmap: 'time' as const, rest: 90, activePlanId: null }
+const DEFAULT_SETTINGS = { unit: 'kg' as const, effort: 'rir' as const, heatmap: 'time' as const, rest: 90, widgets: ['next'], activePlanId: null }
 
 export const newId = () => crypto.randomUUID()
 
@@ -315,6 +324,7 @@ function listen(user: User) {
           effort: snap.get('effort') ?? DEFAULT_SETTINGS.effort,
           heatmap: snap.get('heatmap') ?? DEFAULT_SETTINGS.heatmap,
           rest: snap.get('rest') === undefined ? DEFAULT_SETTINGS.rest : snap.get('rest'), // null is a real answer: no timer
+          widgets: snap.get('widgets') ?? DEFAULT_SETTINGS.widgets,
           activePlanId: snap.get('activePlanId') ?? null,
         },
       })
@@ -891,7 +901,7 @@ export function deleteRoutine(id: string) {
   heartbeat()
 }
 
-export function setSettings(patch: Partial<Pick<Profile, 'unit' | 'effort' | 'heatmap' | 'rest' | 'activePlanId'>>) {
+export function setSettings(patch: Partial<Pick<Profile, 'unit' | 'effort' | 'heatmap' | 'rest' | 'widgets' | 'activePlanId'>>) {
   setDoc(gymRef(me()), patch, { merge: true }).catch(fail)
   heartbeat()
 }

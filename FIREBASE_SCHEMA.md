@@ -33,7 +33,7 @@ Project `scheduleproject-8f615`, database `(default)`.
 ```
 users/{uid}/apps/gym                     { unit: 'kg'|'lb', effort: 'rir'|'rpe'|'none',
                                            heatmap: 'time'|'sets'|'volume'|'plain', rest: number|null,
-                                           activePlanId: string|null }
+                                           widgets: string[], activePlanId: string|null }
 users/{uid}/apps/gym/exercises/{id}      { name, muscle: MuscleId, secondary: MuscleId[], description: string|null }
 users/{uid}/apps/gym/modifiers/{id}      { label }                                  <- the user's own modifiers
 users/{uid}/apps/gym/plans/{id}          { name, routineIds: string[], schedule: WeeklySchedule|null,
@@ -64,6 +64,7 @@ type LoggedExercise = { exerciseId: string, name: string, sets: LoggedSet[] }
 - `effort` decides what the session logger asks for. It's a display/input setting, never a rewrite of history — see sets.
 - `activePlanId` — exactly one plan is active at a time (the user's decision). Switching plans clears the previous plan's unfulfilled generated days, so two patterns never fight over the same week.
 - `heatmap` — which measure shades Sisu's year grid (Calendar tab). Display only, nothing else reads it.
+- `widgets` — Sisu's dashboard, in order. Unknown ids are ignored on read, so an older build still opens.
 - `rest` — seconds to count down after a set is ticked. **`null` means no rest timer**, and is different from the field being absent, which falls back to 90.
 
 **Exercises and modifiers**

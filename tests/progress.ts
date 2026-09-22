@@ -1,5 +1,5 @@
 /** Estimated 1RM and the shape of an exercise's progress. No Firebase, no DOM. */
-import { bestSet, e1rm, inReserve, newRecords, points, streakOf, summary } from '../src/progress.ts'
+import { bestSet, e1rm, inReserve, newRecords, points, recentRecords, streakOf, summary } from '../src/progress.ts'
 
 let failed = 0
 const check = (what: string, ok: boolean, got?: unknown) => {
@@ -59,6 +59,20 @@ check('a record names the set that made it', newRecords(push(70), [{ exercises: 
 check('only the exercises you actually beat count', newRecords([...push(70), { exerciseId: 'squat', name: 'Squat', sets: [{ weight: 50, reps: 5 }] }], [{ exercises: [...push(60), { exerciseId: 'squat', name: 'Squat', sets: [{ weight: 100, reps: 5 }] }] }]).map((r) => r.exerciseId).join() === 'bench')
 check('a set with nothing to measure is never a record', newRecords([{ exerciseId: 'bw', name: 'Push Up', sets: [{ weight: 0, reps: 20 }] }], []).length === 0)
 
+
+/* recent records */
+const hist = [
+  { at: 1, exercises: push(60) },
+  { at: 2, exercises: push(55) },
+  { at: 3, exercises: push(70) },
+  { at: 4, exercises: [{ exerciseId: 'squat', name: 'Squat', sets: [{ weight: 100, reps: 5 }] }] },
+]
+const recents = recentRecords(hist, 5)
+check('every record is caught as it happens', recents.length === 3, recents.map((r) => r.at))
+check('and the newest comes first', recents[0].at === 4 && recents[0].name === 'Squat', recents[0])
+check('a session that beat nothing is left out', !recents.some((r) => r.at === 2))
+check('the limit is respected', recentRecords(hist, 1).length === 1)
+check('no workouts, no records', recentRecords([], 3).length === 0)
 
 /* streaks: a rest day is fine, four days off is not */
 const day = 86_400_000

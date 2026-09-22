@@ -1,30 +1,30 @@
-import { motion } from 'motion/react'
-import { ChevronRight, Flame, Play, Timer, Trophy } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
-import { fromKg, muscleLabel, startSession, stats, useStore, volume, ymd } from '../store'
-import { Plan } from '../slots'
+import { useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { ArrowDown, ArrowUp, Check, Pencil, Plus, X } from 'lucide-react'
+import { setSettings, useStore } from '../store'
+import { widgetById, WIDGETS } from '../widgets'
 import { SyncBadge } from '../sync'
-import { Block, Counter, fmtCompact, fmtDay, fmtDuration, Page, Tap } from '../ui'
+import { Block, btn, item, Page, Sheet, spring, Tap } from '../ui'
 
 const greeting = () => {
   const h = new Date().getHours()
   return h < 12 ? 'Good morning' : h < 19 ? 'Good afternoon' : 'Good evening'
 }
 
+/** The dashboard: the widgets you chose, in the order you put them. */
 export default function Today() {
-  const { profile, routines, sessions, slots, active } = useStore()
-  const navigate = useNavigate()
-  const st = stats(sessions)
+  const { profile } = useStore()
+  const [editing, setEditing] = useState(false)
+  const [adding, setAdding] = useState(false)
 
-  // today's plan wins; otherwise suggest the routine trained least recently (an empty routine is no use)
-  const todaySlot = slots.find((s) => s.date === ymd(Date.now()) && !s.sessionId)
-  const planned = todaySlot?.routineId ? routines.find((r) => r.id === todaySlot.routineId) : undefined
-  const lastDone = (id: string) => sessions.find((s) => s.routineId === id)?.at ?? 0
-  const next = planned ?? routines.filter((r) => r.exercises.length).sort((a, b) => lastDone(a.id) - lastDone(b.id))[0]
-
-  const go = () => {
-    if (!active && next) startSession(next, todaySlot?.id ?? null)
-    navigate(active || next ? '/session' : '/workouts')
+  const shown = profile.widgets.map(widgetById).filter((w): w is NonNullable<typeof w> => !!w)
+  const spare = WIDGETS.filter((w) => !profile.widgets.includes(w.id))
+  const save = (ids: string[]) => setSettings({ widgets: ids })
+  const move = (i: number, to: number) => {
+    if (to < 0 || to >= shown.length) return
+    const ids = shown.map((w) => w.id)
+    ids.splice(to, 0, ...ids.splice(i, 1))
+    save(ids)
   }
 
   return (
@@ -36,83 +36,89 @@ export default function Today() {
       }
       title={profile.name}
       action={
-        <Tap onClick={() => navigate('/profile')} className="grid size-12 place-items-center rounded-full bg-surface-2 font-display text-lg font-semibold text-white">
-          {profile.name.charAt(0).toUpperCase()}
+        <Tap
+          onClick={() => setEditing((e) => !e)}
+          aria-label={editing ? 'Done editing' : 'Edit dashboard'}
+          className={`grid size-12 place-items-center rounded-full ${editing ? 'bg-accent text-ink' : 'bg-surface-2 text-zinc-300'}`}
+        >
+          {editing ? <Check size={22} /> : <Pencil size={19} />}
         </Tap>
       }
     >
-      {/* hero */}
-      <Block className="card relative overflow-hidden p-6">
-        <p className="relative text-xs font-semibold tracking-widest text-muted uppercase">
-          {active ? 'In progress' : todaySlot ? (todaySlot.start ? `Today · ${todaySlot.start}` : 'Today') : 'Up next'}
-        </p>
-        <h2 className="relative mt-1 font-display text-5xl font-bold tracking-tight">{active?.routine ?? next?.name ?? 'Rest day'}</h2>
-        <p className="relative mt-1 text-sm text-muted">
-          {next || active ? `${(active ?? next).exercises.length} exercises${next && !active ? ` · ${muscleLabel(next.muscles)}` : ''}` : 'No routines'}
-        </p>
-        <Tap onClick={go} className="relative mt-6 flex items-center gap-2 rounded-2xl bg-accent px-5 py-3.5 font-display font-semibold text-ink">
-          <Play size={18} fill="currentColor" /> {active ? 'Resume workout' : next ? 'Start workout' : 'Create routine'}
-        </Tap>
-      </Block>
-
-      {/* stats */}
-      <Block className="grid grid-cols-3 gap-3">
-        {[
-          { icon: Flame, label: 'Streak', value: st.streak, suffix: '' },
-          { icon: Trophy, label: 'Workouts', value: sessions.length, suffix: '' },
-          { icon: Timer, label: `Week ${profile.unit}`, value: fromKg(st.weekVolume, profile.unit), suffix: '' },
-        ].map(({ icon: Icon, label, value, suffix }) => (
-          <div key={label} className="card p-4">
-            <Icon size={18} className="text-accent" />
-            <p className="mt-3 font-display text-2xl font-bold">
-              <Counter value={value} format={value >= 10_000 ? fmtCompact : undefined} />
-              {suffix}
-            </p>
-            <p className="text-xs text-zinc-500">{label}</p>
-          </div>
-        ))}
-      </Block>
-
-      <Block>
-        <Plan />
-      </Block>
-
-      {/* recent */}
-      <Block>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-display text-xl font-semibold">Recent</h3>
-          <Tap onClick={() => navigate('/progress')} className="flex items-center text-sm text-muted">
-            All <ChevronRight size={16} />
+      {shown.length === 0 && !editing && (
+        <Block className="card p-6 text-center">
+          <p className="font-display text-xl font-semibold">Empty dashboard</p>
+          <Tap onClick={() => setEditing(true)} className={`${btn.primary} mt-5 w-full`}>
+            Add a widget
           </Tap>
-        </div>
-        {sessions.length === 0 ? (
-          <div className="card p-6 text-center text-sm text-muted">No workouts</div>
-        ) : (
-          <div className="space-y-2">
-            {sessions.slice(0, 4).map((s, i) => (
-              <motion.div
-                key={s.id}
-                initial={{ opacity: 0, x: -12 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.35 + i * 0.05 }}
-                className="card flex items-center gap-4 p-4"
-              >
-                <div className="grid size-11 place-items-center rounded-xl bg-surface-2 font-display font-bold text-accent">{s.title.charAt(0)}</div>
-                <div className="flex-1">
-                  <p className="font-semibold">{s.title}</p>
-                  <p className="text-xs text-zinc-500">
-                    {fmtDay(s.at)} · {fmtDuration(s.durationSec)}
-                  </p>
+        </Block>
+      )}
+
+      {/* editing straightens the grid out into a list, so a widget can be moved without hunting for it */}
+      {editing ? (
+        <Block className="space-y-3">
+          <AnimatePresence initial={false}>
+            {shown.map((w, i) => (
+              <motion.div key={w.id} layout transition={spring} exit={{ opacity: 0, scale: 0.97 }} className="rounded-3xl bg-surface-2/40 p-2">
+                <div className="mb-2 flex items-center gap-1 px-2">
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-300">{w.name}</span>
+                  <Tap onClick={() => move(i, i - 1)} disabled={i === 0} aria-label={`Move ${w.name} up`} className="grid size-8 place-items-center rounded-full text-zinc-400 disabled:text-zinc-700">
+                    <ArrowUp size={15} />
+                  </Tap>
+                  <Tap
+                    onClick={() => move(i, i + 1)}
+                    disabled={i === shown.length - 1}
+                    aria-label={`Move ${w.name} down`}
+                    className="grid size-8 place-items-center rounded-full text-zinc-400 disabled:text-zinc-700"
+                  >
+                    <ArrowDown size={15} />
+                  </Tap>
+                  <Tap
+                    onClick={() => save(shown.filter((x) => x.id !== w.id).map((x) => x.id))}
+                    aria-label={`Remove ${w.name}`}
+                    className="grid size-8 place-items-center rounded-full text-red-400"
+                  >
+                    <X size={15} />
+                  </Tap>
                 </div>
-                <p className="font-display font-semibold">
-                  {fmtCompact(fromKg(volume(s.exercises), profile.unit))}
-                  <span className="text-xs text-zinc-500"> {profile.unit}</span>
-                </p>
+                <div className="pointer-events-none">
+                  <w.Render />
+                </div>
               </motion.div>
             ))}
-          </div>
-        )}
-      </Block>
+          </AnimatePresence>
+
+          <Tap onClick={() => setAdding(true)} disabled={!spare.length} className={`${btn.ghost} flex w-full items-center justify-center gap-2 disabled:opacity-40`}>
+            <Plus size={18} /> {spare.length ? 'Add widget' : 'All widgets added'}
+          </Tap>
+        </Block>
+      ) : (
+        <motion.div variants={item} className="grid grid-cols-2 gap-3">
+          {shown.map((w) => (
+            <div key={w.id} className={w.wide ? 'col-span-2' : ''}>
+              <w.Render />
+            </div>
+          ))}
+        </motion.div>
+      )}
+
+      <Sheet open={adding} onClose={() => setAdding(false)} title="Add widget">
+        <div className="space-y-1 pb-6">
+          {spare.map((w) => (
+            <Tap
+              key={w.id}
+              onClick={() => {
+                save([...profile.widgets, w.id])
+                setAdding(false)
+              }}
+              className="flex w-full items-center justify-between rounded-2xl bg-surface-2 px-4 py-3.5 text-left font-medium text-zinc-300"
+            >
+              {w.name}
+              <Plus size={16} className="text-muted" />
+            </Tap>
+          ))}
+        </div>
+      </Sheet>
     </Page>
   )
 }
