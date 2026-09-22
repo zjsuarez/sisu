@@ -12,6 +12,7 @@ import ExerciseScreen from './pages/Exercise'
 import RoutineEditor from './pages/Routine'
 import PlanScreen from './pages/Plan'
 import Session from './pages/Session'
+import Summary from './pages/Summary'
 import Progress from './pages/Progress'
 import Profile from './pages/Profile'
 import SignIn, { Splash } from './pages/SignIn'
@@ -32,7 +33,7 @@ const TABS = [
 export default function App() {
   const location = useLocation()
   const { user, plans, profile } = useStore()
-  const fullScreen = location.pathname === '/session' || location.pathname.startsWith('/routine/')
+  const fullScreen = location.pathname === '/session' || location.pathname.startsWith('/routine/') || location.pathname.startsWith('/summary/')
 
   // a new screen starts at the top: the shell scrolls, so it would otherwise keep the last one's offset
   useEffect(() => {
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/plan/:id" element={<PlanScreen />} />
           <Route path="/routine/:id" element={<RoutineEditor />} />
           <Route path="/session" element={<Session />} />
+          <Route path="/summary/:id" element={<Summary />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="*" element={<Navigate to="/" replace />} />

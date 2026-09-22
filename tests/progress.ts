@@ -1,5 +1,5 @@
 /** Estimated 1RM and the shape of an exercise's progress. No Firebase, no DOM. */
-import { bestSet, e1rm, inReserve, points, streakOf, summary } from '../src/progress.ts'
+import { bestSet, e1rm, inReserve, newRecords, points, streakOf, summary } from '../src/progress.ts'
 
 let failed = 0
 const check = (what: string, ok: boolean, got?: unknown) => {
@@ -48,6 +48,17 @@ check('and the heaviest weight ever', sum.heaviest.set.weight === 70, sum.heavie
 check('and the change since last time', sum.change !== null && sum.change > 0, sum.change)
 check('one session has nothing to compare with', summary(points([history[1]]))?.change === null)
 check('no history, no summary', summary([]) === null)
+
+/* new records */
+const push = (weight: number, reps = 8) => [{ exerciseId: 'bench', name: 'Bench Press', sets: [{ weight, reps }] }]
+check('the first time you log an exercise is a record', newRecords(push(60), []).length === 1)
+check('beating your best is a record', newRecords(push(70), [{ exercises: push(60) }]).length === 1)
+check('matching it is not', newRecords(push(60), [{ exercises: push(60) }]).length === 0)
+check('less weight for more reps can still be one', newRecords(push(60, 12), [{ exercises: push(65, 8) }]).length === 1)
+check('a record names the set that made it', newRecords(push(70), [{ exercises: push(60) }])[0].set.weight === 70)
+check('only the exercises you actually beat count', newRecords([...push(70), { exerciseId: 'squat', name: 'Squat', sets: [{ weight: 50, reps: 5 }] }], [{ exercises: [...push(60), { exerciseId: 'squat', name: 'Squat', sets: [{ weight: 100, reps: 5 }] }] }]).map((r) => r.exerciseId).join() === 'bench')
+check('a set with nothing to measure is never a record', newRecords([{ exerciseId: 'bw', name: 'Push Up', sets: [{ weight: 0, reps: 20 }] }], []).length === 0)
+
 
 /* streaks: a rest day is fine, four days off is not */
 const day = 86_400_000

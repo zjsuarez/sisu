@@ -11,32 +11,48 @@ import {
   useStore,
   type Exercise,
   type Modifier,
+  type MuscleId,
 } from './store'
 import { blankExercise, ExerciseForm, type ExerciseDraft } from './exerciseForm'
 import { btn, Sheet, spring, Tap } from './ui'
 
 export type Picked = { exerciseId: string; name: string }
 type Pick = { key: string; base: Exercise; modifierIds: string[] }
+/** a row you can add: a plain exercise, or a variant you have already trained with */
+type Option = { id: string; name: string; muscle: MuscleId; base: Exercise; modifierIds: string[] }
 
 const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent'
 const chip = (on: boolean) => `rounded-full border px-3.5 py-2 text-sm transition-colors ${on ? 'border-accent bg-accent/10 text-accent' : 'border-line text-zinc-400'}`
 
 /** Pick several exercises at once; each one can carry modifiers. Used by the routine editor and mid-workout. */
 export function ExercisePicker({ open, onClose, onAdd }: { open: boolean; onClose: () => void; onAdd: (picks: Picked[]) => void }) {
-  const { exercises, modifiers } = useStore()
+  const { exercises, modifiers, routines, sessions } = useStore()
   const [query, setQuery] = useState('')
   const [picks, setPicks] = useState<Pick[]>([])
   const [tuning, setTuning] = useState<string | null>(null)
   const [draft, setDraft] = useState<ExerciseDraft | null>(null)
 
+  // a variant is only an id, but once you have trained with it it is an exercise to you: offer it here
+  // as well, the same way the catalogue lists it
+  const used = [
+    ...new Set([...routines.flatMap((r) => r.exercises), ...sessions.flatMap((s) => s.exercises)].map((e) => e.exerciseId).filter((id) => id.includes('~'))),
+  ]
+  const all: Option[] = [
+    ...exercises.map((e) => ({ id: e.id, name: e.name, muscle: e.muscle, base: e, modifierIds: [] })),
+    ...used.map((id) => {
+      const x = resolve(id)
+      return { id, name: x.name, muscle: x.base.muscle, base: x.base, modifierIds: x.modifiers.map((m) => m.id) }
+    }),
+  ].sort((a, b) => a.name.localeCompare(b.name))
+
   const q = query.trim().toLowerCase()
-  const options = exercises.filter((e) => !q || e.name.toLowerCase().includes(q) || MUSCLES[e.muscle].toLowerCase().includes(q))
+  const options = all.filter((e) => !q || e.name.toLowerCase().includes(q) || MUSCLES[e.muscle].toLowerCase().includes(q))
 
   const idOf = (p: Pick) => buildExerciseId(p.base, p.modifierIds.map((m) => modifiers.find((x) => x.id === m)).filter((m): m is Modifier => !!m))
   const nameOf = (p: Pick) => resolve(idOf(p)).name
 
-  const add = (base: Exercise) => {
-    setPicks((list) => [...list, { key: newId(), base, modifierIds: [] }])
+  const add = (o: Option) => {
+    setPicks((list) => [...list, { key: newId(), base: o.base, modifierIds: o.modifierIds }])
     setQuery('')
   }
 
@@ -101,11 +117,14 @@ export function ExercisePicker({ open, onClose, onAdd }: { open: boolean; onClos
           <div className="space-y-1">
             {options.slice(0, 40).map((x) => (
               <Tap key={x.id} onClick={() => add(x)} className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left">
-                <span>
-                  {x.name}
-                  <span className="ml-2 text-xs text-muted">{MUSCLES[x.muscle]}</span>
+                <span className="flex min-w-0 items-center gap-2">
+                  {x.modifierIds.length > 0 && <SlidersHorizontal size={13} className="shrink-0 text-muted" />}
+                  <span className="truncate">
+                    {x.name}
+                    <span className="ml-2 text-xs text-muted">{MUSCLES[x.muscle]}</span>
+                  </span>
                 </span>
-                <Plus size={16} className="text-muted" />
+                <Plus size={16} className="shrink-0 text-muted" />
               </Tap>
             ))}
             <Tap
@@ -146,7 +165,7 @@ export function ExercisePicker({ open, onClose, onAdd }: { open: boolean; onClos
           <ExerciseForm
             draft={draft}
             setDraft={setDraft}
-            onSaved={(e) => add({ id: e.id, name: e.name, muscle: e.muscle, secondary: e.secondary, description: e.description, custom: true })}
+            onSaved={(e) => add({ id: e.id, name: e.name, muscle: e.muscle, base: { ...e, custom: true }, modifierIds: [] })}
           />
         )}
       </Sheet>

@@ -578,9 +578,10 @@ export const addExercise = (exerciseId: string, name: string) =>
 export const discardSession = () => setActive(null)
 
 /** @param end 'HH:MM' the workout actually finished; defaults to now (see Session.tsx for the long-workout prompt) */
+/** @returns the id of the workout that was saved, or null when there was nothing to save */
 export function finishSession(end = hm(Date.now())) {
   const a = state.active
-  if (!a) return
+  if (!a) return null
   setActive(null)
   const exercises = a.exercises
     .map((e) => ({
@@ -591,7 +592,7 @@ export function finishSession(end = hm(Date.now())) {
         .map(({ weight, reps, rir, rpe }) => ({ weight, reps, ...(rir !== undefined && { rir }), ...(rpe !== undefined && { rpe }) })),
     }))
     .filter((e) => e.sets.length)
-  if (!exercises.length) return // nothing logged, nothing saved
+  if (!exercises.length) return null // nothing logged, nothing saved
 
   const date = ymd(a.startedAt)
   const id = newId()
@@ -614,6 +615,7 @@ export function finishSession(end = hm(Date.now())) {
   if (slot) batch.set(doc(col(me(), 'slots'), slot.id), { sessionId: id }, { merge: true })
   batch.commit().catch(fail)
   heartbeat()
+  return id
 }
 
 /** Sisu only: the schedule app offers no delete. The day it fulfilled goes back to being planned. */

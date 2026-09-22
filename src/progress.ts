@@ -33,6 +33,21 @@ export function streakOf(dayStarts: number[], today: number, maxGap = 4) {
 /** the set that says the most about a session: the highest e1RM in it */
 export const bestSet = (sets: Logged[]) => sets.reduce<Logged | null>((best, s) => (!best || e1rm(s) > e1rm(best) ? s : best), null)
 
+/**
+ * Exercises this workout set a new best on, judged by e1RM against every earlier session.
+ * The first time you ever log an exercise counts: there was no record to beat, so you made one.
+ */
+export function newRecords(current: { exerciseId: string; name: string; sets: Logged[] }[], earlier: { exercises: { exerciseId: string; sets: Logged[] }[] }[]) {
+  const best = new Map<string, number>()
+  for (const s of earlier) for (const e of s.exercises) best.set(e.exerciseId, Math.max(best.get(e.exerciseId) ?? 0, ...e.sets.map(e1rm)))
+  return current
+    .map((e) => {
+      const top = bestSet(e.sets)
+      return top && e1rm(top) > (best.get(e.exerciseId) ?? 0) ? { exerciseId: e.exerciseId, name: e.name, set: top, e1rm: e1rm(top) } : null
+    })
+    .filter((r): r is NonNullable<typeof r> => !!r)
+}
+
 /** One point per session, oldest first — what a chart needs. Sessions with nothing to measure drop out. */
 export function points(history: { at: number; sets: Logged[] }[]) {
   return history

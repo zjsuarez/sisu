@@ -212,6 +212,23 @@ const pushWithNew = (await listDocs('routines')).find((d) => plain(d).name === '
 check('the routine keeps both after saving', JSON.stringify(pushWithNew).includes('Sled Push') && JSON.stringify(pushWithNew).includes('Cable Lateral Raise'))
 check('the modifier is in the exercise id, not a second record', JSON.stringify(pushWithNew).includes('lateral-raise~cable'))
 
+// the picker offers variants you have already used, not just the plain catalogue
+await phone.ev(`location.hash = '#/routine/${pushId}'`)
+await sleep(1500)
+await phone.ev(click('Add exercise'))
+await sleep(1200)
+await phone.ev(
+  dialogEval(`const input = d.querySelector('input[placeholder="Search"]')
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(input, 'Cable')
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  return input.value`),
+)
+await sleep(700)
+const offered = await phone.ev(dialogEval(`return [...d.querySelectorAll('button')].map((b) => b.textContent.trim()).join(' | ')`))
+check('the picker offers a variant already in use', /Cable Lateral Raise/.test(offered), offered.slice(0, 120))
+await phone.ev(closeSheet())
+await sleep(800)
+
 // ---------------------------------------------------------------- exercise library
 await phone.ev("location.hash = '#/exercises'")
 await sleep(1500)
@@ -332,6 +349,16 @@ check('finishing warns about sets that were never ticked', /not ticked/i.test(wa
 check("the warning is the app's own, not the browser's", warning !== 'NO DIALOG')
 await phone.ev(`(() => { const b = [...document.querySelectorAll('[role="alertdialog"] button')].at(-1); if (!b) return 'NO BUTTON'; b.click(); return 'clicked' })()`)
 await sleep(2500)
+
+// ---- the summary, straight after finishing
+const summary = await phone.ev(body)
+check('finishing opens the summary', /^#\/summary\//.test(await phone.ev('location.hash')), await phone.ev('location.hash'))
+check('it counts the workout up', /Workout complete/i.test(summary) && /Volume/i.test(summary) && /New PRs/i.test(summary), summary.split('\n').filter(Boolean).slice(0, 10).join(' | '))
+check('a first-ever lift is a new record', /New records/i.test(summary), summary.split('\n').filter(Boolean).slice(0, 12).join(' | '))
+await phone.shot('e2e-summary')
+log('  done:', await phone.ev(click('Done')))
+await sleep(2000)
+
 const offlineBody = await phone.ev(body)
 check('offline: workout shows in the app straight away', offlineBody.includes('Recent') && offlineBody.includes('Push'))
 check('offline: badge says it is waiting to upload', /\d+ waiting/i.test(offlineBody), offlineBody.split('\n').find((l) => /waiting|Offline|Synced/i.test(l)))
