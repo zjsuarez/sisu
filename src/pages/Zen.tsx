@@ -4,7 +4,8 @@ import { motion } from 'motion/react'
 import { ArrowLeft, ArrowRight, Check, ChevronLeft, EllipsisVertical, Plus } from 'lucide-react'
 import { addSet, editSet, exerciseHistory, fromKg, lastSet, moveExercise, muscleLabel, NO_CHRONO, repLabel, resolve, toKg, useStore, type Active } from '../store'
 import { effortLabel, NumInput, setText } from '../sets'
-import { Chronometer } from '../chrono'
+import { AnimatePresence } from 'motion/react'
+import { Chronometer, RestBar } from '../chrono'
 import { fmtDay, Sheet, Tap } from '../ui'
 
 /**
@@ -13,16 +14,24 @@ import { fmtDay, Sheet, Tap } from '../ui'
  */
 export default function Zen({
   active,
-  now,
   at,
   setAt,
+  rest,
+  restTotal,
+  onRest,
+  onSkipRest,
+  onExtendRest,
   onExit,
   onAdd,
 }: {
   active: Active
-  now: number
   at: number
   setAt: (i: number) => void
+  rest: number | null
+  restTotal: number
+  onRest: (done: boolean) => void
+  onSkipRest: () => void
+  onExtendRest: () => void
   onExit: () => void
   onAdd: () => void
 }) {
@@ -79,12 +88,13 @@ export default function Zen({
 
       <div ref={scroller} onScroll={onScroll} className="flex flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain">
         {active.exercises.map((x, ei) => (
-          <ExercisePage key={x.name + ei} ei={ei} exercise={x} unit={profile.unit} effort={profile.effort} />
+          <ExercisePage key={x.name + ei} ei={ei} exercise={x} unit={profile.unit} effort={profile.effort} onRest={onRest} />
         ))}
       </div>
 
       <div className="safe-bottom shrink-0 px-6 pt-2 pb-4">
-        <Chronometer chrono={active.chrono ?? NO_CHRONO} now={now} />
+        <AnimatePresence>{rest && <RestBar key="rest" until={rest} total={restTotal} onExtend={onExtendRest} onSkip={onSkipRest} />}</AnimatePresence>
+        <Chronometer chrono={active.chrono ?? NO_CHRONO} />
       </div>
 
       <Sheet open={!!sheet} onClose={() => setSheet(null)} title={sheet === 'history' ? 'History' : sheet === 'about' ? e.name : e.name}>
@@ -135,7 +145,19 @@ export default function Zen({
   )
 }
 
-function ExercisePage({ ei, exercise, unit, effort }: { ei: number; exercise: Active['exercises'][number]; unit: 'kg' | 'lb'; effort: 'rir' | 'rpe' | 'none' }) {
+function ExercisePage({
+  ei,
+  exercise,
+  unit,
+  effort,
+  onRest,
+}: {
+  ei: number
+  exercise: Active['exercises'][number]
+  unit: 'kg' | 'lb'
+  effort: 'rir' | 'rpe' | 'none'
+  onRest: (done: boolean) => void
+}) {
   const prev = lastSet(exercise.exerciseId)
   const target = exercise.targets.length ? repLabel(exercise.targets[0]) : null
   const cols = effort === 'none' ? 'grid-cols-[1.5rem_1fr_1fr_2.75rem]' : 'grid-cols-[1.5rem_1fr_1fr_1fr_2.75rem]'
@@ -186,7 +208,10 @@ function ExercisePage({ ei, exercise, unit, effort }: { ei: number; exercise: Ac
               />
             )}
             <Tap
-              onClick={() => editSet(ei, si, { done: !s.done })}
+              onClick={() => {
+                editSet(ei, si, { done: !s.done })
+                onRest(!s.done)
+              }}
               aria-label={s.done ? 'Mark set not done' : 'Complete set'}
               aria-pressed={s.done}
               className={`grid h-11 place-items-center rounded-xl ${s.done ? 'bg-accent text-ink' : 'bg-surface-2 text-zinc-500'}`}

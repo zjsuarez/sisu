@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowDown, ArrowUp, Check, ChevronDown, Expand, Plus, Trash2 } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
@@ -7,7 +7,7 @@ import { ExercisePicker } from '../exercisePicker'
 import { btn, fmtCompact, fmtDuration, spring, Tap, useNow } from '../ui'
 import { ask, askText } from '../dialog'
 import { NO_CHRONO } from '../store'
-import { Chronometer } from '../chrono'
+import { Chronometer, RestBar } from '../chrono'
 import { effortLabel, NumInput } from '../sets'
 import Zen from './Zen'
 
@@ -34,6 +34,19 @@ export default function Session() {
   // zen mode sticks: if you train that way, every workout opens that way
   const [zen, setZen] = useState(() => localStorage.getItem(ZEN_KEY) === '1')
   const [at, setAt] = useState(0) // which exercise zen is showing
+  const [restUntil, setRestUntil] = useState<number | null>(null)
+
+  // one buzz when the rest is up; the bar takes itself down
+  useEffect(() => {
+    if (!restUntil) return
+    const t = setTimeout(() => {
+      navigator.vibrate?.([200, 100, 200])
+      setRestUntil(null)
+    }, restUntil - Date.now())
+    return () => clearTimeout(t)
+  }, [restUntil])
+  /** ticking a set starts the rest, unticking one calls it off; no timer set means nothing happens */
+  const rested = (nowDone: boolean) => setRestUntil(nowDone && profile.rest ? Date.now() + profile.rest * 1000 : null)
   const showZen = (on: boolean) => {
     setZen(on)
     localStorage.setItem(ZEN_KEY, on ? '1' : '0')
@@ -55,7 +68,10 @@ export default function Session() {
 
   const cols = profile.effort === 'none' ? 'grid-cols-[2rem_1fr_1fr_3rem]' : 'grid-cols-[1.5rem_1fr_1fr_1fr_2.75rem]'
 
-  const toggle = (ei: number, si: number, wasDone: boolean) => editSet(ei, si, { done: !wasDone })
+  const toggle = (ei: number, si: number, wasDone: boolean) => {
+    editSet(ei, si, { done: !wasDone })
+    rested(!wasDone)
+  }
 
   const finish = async () => {
     if (!done && !(await ask({ title: 'No sets ticked', body: 'End this workout without saving it?', confirm: 'End', danger: true }))) return
@@ -81,7 +97,20 @@ export default function Session() {
   }
 
   if (zen && active.exercises.length)
-    return <Zen active={active} now={now} at={at} setAt={setAt} onExit={() => showZen(false)} onAdd={() => setPicking(true)} />
+    return (
+      <Zen
+        active={active}
+        at={at}
+        setAt={setAt}
+        rest={restUntil}
+        restTotal={profile.rest ?? 0}
+        onRest={rested}
+        onSkipRest={() => setRestUntil(null)}
+        onExtendRest={() => setRestUntil((t) => (t ?? Date.now()) + 15_000)}
+        onExit={() => showZen(false)}
+        onAdd={() => setPicking(true)}
+      />
+    )
 
   return (
     <motion.main initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} transition={spring} className="mx-auto min-h-full max-w-md pb-40">
@@ -224,8 +253,19 @@ export default function Session() {
       </div>
 
       <div className="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md px-4 pb-2">
+        <AnimatePresence>
+          {restUntil && (
+            <RestBar
+              key="rest"
+              until={restUntil}
+              total={profile.rest ?? 0}
+              onExtend={() => setRestUntil((t) => (t ?? Date.now()) + 15_000)}
+              onSkip={() => setRestUntil(null)}
+            />
+          )}
+        </AnimatePresence>
         <div className="rounded-3xl bg-surface/90 px-5 py-3 backdrop-blur-xl">
-          <Chronometer chrono={active.chrono ?? NO_CHRONO} now={now} compact />
+          <Chronometer chrono={active.chrono ?? NO_CHRONO} compact />
         </div>
       </div>
 

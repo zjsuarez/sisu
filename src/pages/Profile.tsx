@@ -3,7 +3,8 @@ import { motion } from 'motion/react'
 import { DatabaseBackup, Download, LogOut, Share, Smartphone } from 'lucide-react'
 import { deviceName, fullBackup, installed, renameDevice, setSettings, signOut, useStore, type Effort } from '../store'
 import { Devices } from '../sync'
-import { Block, btn, Page, spring, Tap } from '../ui'
+import { NumInput } from '../sets'
+import { Block, btn, fmtDuration, Page, spring, Tap } from '../ui'
 import { ask, tell } from '../dialog'
 
 type InstallEvent = Event & { prompt: () => Promise<void> }
@@ -99,6 +100,37 @@ export default function Profile() {
           </div>
         </div>
 
+        <div>
+          <span className={label}>Rest timer</span>
+          <p className="mt-0.5 text-sm text-muted">{profile.rest ? `${fmtDuration(profile.rest)} after every set you tick` : 'None'}</p>
+          <div className="mt-2 flex items-center gap-2">
+            <Tap
+              onClick={() => setSettings({ rest: null })}
+              className={`rounded-2xl px-4 py-3 font-display font-semibold ${profile.rest === null ? 'bg-accent text-ink' : 'bg-surface-2 text-zinc-400'}`}
+            >
+              None
+            </Tap>
+            <div className="flex flex-1 items-center gap-2">
+              <NumInput
+                label="Rest minutes"
+                value={profile.rest === null ? undefined : Math.floor(profile.rest / 60)}
+                hint="0"
+                step={1}
+                max={59}
+                onChange={(m) => setSettings({ rest: Math.min(3599, (m ?? 0) * 60 + (profile.rest ?? 0) % 60) || null })}
+              />
+              <span className="font-display text-lg text-zinc-500">:</span>
+              <NumInput
+                label="Rest seconds"
+                value={profile.rest === null ? undefined : profile.rest % 60}
+                hint="00"
+                step={5}
+                max={59}
+                onChange={(sec) => setSettings({ rest: Math.min(3599, Math.floor((profile.rest ?? 0) / 60) * 60 + (sec ?? 0)) || null })}
+              />
+            </div>
+          </div>
+        </div>
       </Block>
 
       <Block className="space-y-3">
