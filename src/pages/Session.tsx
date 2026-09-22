@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowDown, ArrowUp, Check, ChevronDown, Expand, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronDown, Expand, Minus, Plus, Trash2, X } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, lastSet, moveExercise, repLabel, toKg, useStore, volume } from '../store'
+import { addExercise, addSet, discardSession, editSet, finishSession, fromKg, lastSet, moveExercise, removeExercise, removeSet, repLabel, toKg, useStore, volume } from '../store'
 import { ExercisePicker } from '../exercisePicker'
 import { btn, fmtCompact, fmtDuration, spring, Tap, useNow } from '../ui'
 import { ask, askText } from '../dialog'
@@ -15,11 +15,11 @@ const ZEN_KEY = 'sisu.zen'
 
 const nowHm = () => new Date().toTimeString().slice(0, 5)
 
-/** what the routine asked for: "3 × 8-10", or each set when they differ */
+/** what the routine asked for: "8-10 reps", or each set when they differ */
 const targetLabel = (targets: { repsMin: number; repsMax: number }[]) => {
   if (!targets.length) return 'added on the fly'
   const first = repLabel(targets[0])
-  return targets.every((t) => repLabel(t) === first) ? `${targets.length} × ${first} reps` : targets.map(repLabel).join(' · ') + ' reps'
+  return targets.every((t) => repLabel(t) === first) ? `${first} reps` : targets.map(repLabel).join(' · ') + ' reps'
 }
 
 export default function Session() {
@@ -160,7 +160,10 @@ export default function Session() {
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 <h2 className="truncate font-display text-lg font-semibold">{e.name}</h2>
-                <p className="text-xs text-zinc-500">{targetLabel(e.targets)}</p>
+                <p className="truncate text-xs text-zinc-500">
+                  {targetLabel(e.targets)}
+                  {prev && (prev.weight > 0 || prev.reps > 0) && ` · last ${fromKg(prev.weight, profile.unit)} × ${prev.reps}`}
+                </p>
               </div>
               <Tap
                 onClick={() => moveExercise(ei, ei - 1)}
@@ -177,6 +180,16 @@ export default function Session() {
                 className="grid size-8 place-items-center rounded-full bg-surface-2 text-zinc-400 disabled:text-zinc-700"
               >
                 <ArrowDown size={14} />
+              </Tap>
+              <Tap
+                onClick={async () => {
+                  if (!(await ask({ title: `Remove ${e.name}?`, body: 'Anything logged under it goes with it.', confirm: 'Remove', danger: true }))) return
+                  removeExercise(ei)
+                }}
+                aria-label={`Remove ${e.name}`}
+                className="grid size-8 place-items-center rounded-full bg-surface-2 text-red-400"
+              >
+                <X size={14} />
               </Tap>
             </div>
             <div className="mb-3" />
@@ -236,9 +249,19 @@ export default function Session() {
                 ))}
               </AnimatePresence>
             </div>
-            <Tap onClick={() => addSet(ei)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-medium text-zinc-400">
-              <Plus size={16} /> Add set
-            </Tap>
+            <div className="mt-2 flex gap-2">
+              <Tap onClick={() => addSet(ei)} className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-medium text-zinc-400">
+                <Plus size={16} /> Add set
+              </Tap>
+              <Tap
+                onClick={() => removeSet(ei, e.sets.findLastIndex((x) => !x.done) ?? e.sets.length - 1)}
+                disabled={e.sets.length < 2}
+                aria-label={`Remove a set from ${e.name}`}
+                className="grid w-12 place-items-center rounded-xl text-zinc-400 disabled:text-zinc-700"
+              >
+                <Minus size={16} />
+              </Tap>
+            </div>
           </motion.section>
           )
         })}

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { RELEASES, VERSION } from '../changelog'
 import { motion } from 'motion/react'
-import { DatabaseBackup, Download, LogOut, Share, Smartphone } from 'lucide-react'
+import { DatabaseBackup, Download, LogOut, RefreshCw, Share, Smartphone } from 'lucide-react'
 import { deviceName, fullBackup, installed, renameDevice, setSettings, signOut, useStore, type Effort } from '../store'
 import { Devices } from '../sync'
 import { NumInput } from '../sets'
+import { Sheet } from '../ui'
 import { Block, btn, fmtDuration, Page, spring, Tap } from '../ui'
 import { ask, tell } from '../dialog'
 
@@ -11,6 +13,29 @@ type InstallEvent = Event & { prompt: () => Promise<void> }
 
 const ios = /iphone|ipad|ipod/i.test(navigator.userAgent)
 const label = 'text-xs font-semibold tracking-widest text-zinc-500 uppercase'
+
+/**
+ * Whether the browser is holding a newer build than the one running. The service worker takes over
+ * on the next cold start, so the honest answer is "reload to get it", not "updating…".
+ */
+function useUpdate() {
+  const [waiting, setWaiting] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const check = async () => {
+    setChecking(true)
+    const reg = await navigator.serviceWorker?.getRegistration()
+    if (reg) {
+      reg.addEventListener('updatefound', () => setWaiting(true))
+      await reg.update().catch(() => {})
+      if (reg.waiting || reg.installing) setWaiting(true)
+    }
+    setTimeout(() => setChecking(false), 600)
+  }
+  useEffect(() => {
+    navigator.serviceWorker?.getRegistration().then((reg) => reg && (reg.waiting || reg.installing) && setWaiting(true))
+  }, [])
+  return { waiting, checking, check }
+}
 
 export default function Profile() {
   const { user, profile, routines, sessions } = useStore()
@@ -26,6 +51,8 @@ export default function Profile() {
   }, [])
 
   const [saving, setSaving] = useState(false)
+  const [notes, setNotes] = useState(false)
+  const update = useUpdate()
 
   const download = (name: string, payload: unknown) => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }))
@@ -191,10 +218,53 @@ export default function Profile() {
         <p className="px-1 text-xs text-muted">Everything in this Firebase project, straight from the server.</p>
       </Block>
 
+      <Block className="card p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className={label}>Version</p>
+            <p className="font-display text-lg font-semibold">{VERSION}</p>
+          </div>
+          <Tap onClick={() => setNotes(true)} className={`${btn.ghost} shrink-0 px-4 py-2.5 text-sm`}>
+            What's new
+          </Tap>
+        </div>
+        {update.waiting ? (
+          <Tap onClick={() => location.reload()} className={`${btn.primary} mt-4 flex w-full items-center justify-center gap-2`}>
+            <RefreshCw size={16} /> Reload to update
+          </Tap>
+        ) : (
+          <Tap onClick={update.check} disabled={update.checking} className={`${btn.ghost} mt-4 flex w-full items-center justify-center gap-2 disabled:opacity-50`}>
+            <RefreshCw size={16} className={update.checking ? 'animate-spin' : ''} /> {update.checking ? 'Checking…' : 'Check for updates'}
+          </Tap>
+        )}
+      </Block>
+
       <Block className="pt-6 text-center">
         <p className="font-display text-2xl font-bold tracking-tight text-zinc-700">SISU</p>
         <p className="text-xs text-zinc-600">Strength of will. Determination. Grit.</p>
       </Block>
+
+      <Sheet open={notes} onClose={() => setNotes(false)} title="What's new">
+        <div className="space-y-5 pb-6">
+          {RELEASES.map((r) => (
+            <div key={r.version}>
+              <p className="flex items-baseline gap-2">
+                <span className="font-display font-semibold">{r.version}</span>
+                {r.version === VERSION && <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent uppercase">running</span>}
+                <span className="text-xs text-zinc-600">{new Date(`${r.date}T00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {r.changes.map((c) => (
+                  <li key={c} className="flex gap-2 text-sm text-zinc-400">
+                    <span className="text-zinc-600">—</span>
+                    {c}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </Sheet>
     </Page>
   )
 }

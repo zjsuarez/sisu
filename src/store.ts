@@ -524,9 +524,14 @@ export const exerciseHistory = (exerciseId: string, limit = 12) =>
     .slice(0, limit)
     .map((s) => ({ id: s.id, at: s.at, title: s.title, sets: s.exercises.filter((e) => e.exerciseId === exerciseId).flatMap((e) => e.sets) }))
 
-/** the most recent logged set for an exercise, shown as a hint while you log the next one */
-export const lastSet = (exerciseId: string) =>
-  state.sessions.find((s) => s.exercises.some((e) => e.exerciseId === exerciseId))?.exercises.find((e) => e.exerciseId === exerciseId)?.sets.at(-1)
+/**
+ * The most recent set worth showing for an exercise, as a hint while you log the next one.
+ * Sets ticked without typing anything are skipped: a hint of 0 tells you nothing about last time.
+ */
+export const lastSet = (exerciseId: string) => {
+  const sets = state.sessions.find((s) => s.exercises.some((e) => e.exerciseId === exerciseId))?.exercises.find((e) => e.exerciseId === exerciseId)?.sets
+  return sets?.filter((s) => s.weight > 0 || s.reps > 0).at(-1) ?? sets?.at(-1)
+}
 
 export const startSession = (r: Routine, slotId: string | null = null) =>
   setActive({
@@ -568,6 +573,12 @@ export const moveExercise = (from: number, to: number) =>
     exercises.splice(to, 0, ...exercises.splice(from, 1))
     return { ...a, exercises }
   })
+
+export const removeSet = (ei: number, si: number) =>
+  editActive((a) => ({ ...a, exercises: a.exercises.map((e, i) => (i !== ei ? e : { ...e, sets: e.sets.filter((_, j) => j !== si) })) }))
+
+/** Drops the exercise and everything logged under it; the workout keeps the rest. */
+export const removeExercise = (ei: number) => editActive((a) => ({ ...a, exercises: a.exercises.filter((_, i) => i !== ei) }))
 
 export const addExercise = (exerciseId: string, name: string) =>
   editActive((a) => ({

@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, EllipsisVertical, Plus } from 'lucide-react'
-import { addSet, editSet, exerciseHistory, fromKg, lastSet, moveExercise, muscleLabel, NO_CHRONO, repLabel, resolve, toKg, useStore, type Active } from '../store'
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, EllipsisVertical, Minus, Plus } from 'lucide-react'
+import { addSet, editSet, exerciseHistory, fromKg, lastSet, moveExercise, muscleLabel, NO_CHRONO, removeExercise, removeSet, repLabel, resolve, toKg, useStore, type Active } from '../store'
 import { effortLabel, NumInput, setText } from '../sets'
 import { AnimatePresence } from 'motion/react'
 import { Chronometer, RestBar } from '../chrono'
+import { ask } from '../dialog'
 import { fmtDay, Sheet, Tap } from '../ui'
 
 /**
@@ -110,6 +111,20 @@ export default function Zen({
               <Tap onClick={onAdd} className="w-full rounded-2xl bg-surface-2 px-4 py-3.5 text-left font-medium text-zinc-300">
                 Add exercise
               </Tap>
+              <Tap
+                onClick={async () => {
+                  if (!(await ask({ title: `Remove ${e.name}?`, body: 'Anything logged under it goes with it.', confirm: 'Remove', danger: true }))) return
+                  setSheet(null)
+                  const to = Math.max(0, Math.min(i, active.exercises.length - 2))
+                  removeExercise(i)
+                  setAt(to)
+                  const el = scroller.current
+                  if (el) requestAnimationFrame(() => el.scrollTo({ left: to * el.clientWidth }))
+                }}
+                className="w-full rounded-2xl bg-surface-2 px-4 py-3.5 text-left font-medium text-red-400"
+              >
+                Remove exercise
+              </Tap>
               <div className="flex gap-2">
                 <Tap
                   onClick={() => moveTo(i - 1)}
@@ -168,7 +183,7 @@ function ExercisePage({
       <h1 className="text-center font-display text-4xl leading-tight font-bold tracking-tight">{exercise.name}</h1>
       <p className="mt-2 mb-8 text-center text-sm text-muted">
         {exercise.sets.length} sets{target && ` · ${target} reps`}
-        {prev && ` · last ${fromKg(prev.weight, unit)} ${unit}`}
+        {prev && (prev.weight > 0 || prev.reps > 0) && ` · last ${fromKg(prev.weight, unit)} ${unit} × ${prev.reps}`}
       </p>
 
       <div className={`mb-1 grid ${cols} gap-2 px-1 text-[11px] font-semibold tracking-wider text-zinc-500 uppercase`}>
@@ -224,9 +239,19 @@ function ExercisePage({
         ))}
       </div>
 
-      <Tap onClick={() => addSet(ei)} className="mx-auto mt-4 flex items-center gap-1.5 rounded-full bg-surface-2 px-5 py-2.5 text-sm font-medium text-zinc-300">
-        <Plus size={16} /> Add set
-      </Tap>
+      <div className="mx-auto mt-4 flex items-center gap-2">
+        <Tap onClick={() => addSet(ei)} className="flex items-center gap-1.5 rounded-full bg-surface-2 px-5 py-2.5 text-sm font-medium text-zinc-300">
+          <Plus size={16} /> Add set
+        </Tap>
+        <Tap
+          onClick={() => removeSet(ei, exercise.sets.findLastIndex((x) => !x.done) ?? exercise.sets.length - 1)}
+          disabled={exercise.sets.length < 2}
+          aria-label={`Remove a set from ${exercise.name}`}
+          className="grid size-10 place-items-center rounded-full bg-surface-2 text-zinc-400 disabled:text-zinc-700"
+        >
+          <Minus size={16} />
+        </Tap>
+      </div>
       </div>
     </section>
   )

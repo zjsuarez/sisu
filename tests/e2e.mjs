@@ -341,6 +341,18 @@ await phone.ev(`document.querySelectorAll('[aria-label="Complete set"]')[0].clic
 await sleep(500)
 await phone.ev(`document.querySelectorAll('[aria-label="Complete set"]')[0].click()`)
 await sleep(1200)
+// sets and exercises can go, not only arrive
+const rows = `[...document.querySelectorAll('[aria-label$="weight"]')].length`
+const before = await phone.ev(rows)
+await phone.ev(`document.querySelector('[aria-label^="Remove a set from"]').click()`)
+await sleep(800)
+check('a set can be dropped mid-workout', (await phone.ev(rows)) === before - 1, `${before} -> ${await phone.ev(rows)}`)
+await phone.ev(`document.querySelector('[aria-label^="Remove Tricep"]').click()`)
+await sleep(800)
+await phone.ev(`(() => { const b = [...document.querySelectorAll('[role="alertdialog"] button')].at(-1); b.click(); return 'ok' })()`)
+await sleep(1000)
+check('and so can a whole exercise', !/Tricep Pushdown/.test(await phone.ev(body)), (await phone.ev(body)).split('\n').slice(0, 6).join(' | '))
+
 await phone.shot('e2e-session-offline')
 await phone.ev(click('Finish'))
 await sleep(700)
