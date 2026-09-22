@@ -1,8 +1,9 @@
+import { useLayoutEffect, useRef } from 'react'
 import { motion } from 'motion/react'
 import { ChevronRight, Dumbbell, Flame, Play, Timer, Trophy, Weight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { fromKg, muscleLabel, startSession, stats, useStore, volume, ymd } from './store'
-import { monthGrid } from './calendar'
+import { dayValues, levelOf, monthGrid, scale, yearColumns } from './calendar'
 import { recentRecords } from './progress'
 import { setText } from './sets'
 import { Plan } from './slots'
@@ -12,17 +13,20 @@ import { Counter, fmtCompact, fmtDay, fmtDuration, fmtShortDay, Tap } from './ui
  * The dashboard is whatever the user has put on it. Each widget stands alone — it reads the store
  * itself — so the grid is just a list of ids in the order they chose.
  */
-export type Widget = { id: string; name: string; wide: boolean; Render: () => React.ReactNode }
+export type Widget = { id: string; name: string; size: 'third' | 'half' | 'full'; Render: () => React.ReactNode }
+
+/** the grid is six columns, so a widget can take a third, a half or all of it */
+export const SPAN = { third: 'col-span-2', half: 'col-span-3', full: 'col-span-6' } as const
 
 /** One number and its name, the shape every small widget shares. */
 function Stat({ icon: Icon, label, value, format }: { icon: typeof Flame; label: string; value: number; format?: (n: number) => string }) {
   return (
-    <div className="card h-full p-4">
-      <Icon size={18} className="text-accent" />
-      <p className="mt-3 font-display text-2xl font-bold">
+    <div className="card h-full p-3.5">
+      <Icon size={16} className="text-accent" />
+      <p className="mt-2 truncate font-display text-xl font-bold">
         <Counter value={value} format={format} />
       </p>
-      <p className="text-xs text-zinc-500">{label}</p>
+      <p className="truncate text-[10px] text-zinc-500">{label}</p>
     </div>
   )
 }
@@ -126,6 +130,45 @@ function WeekStrip() {
   )
 }
 
+const SHADE = ['bg-surface-2', 'bg-white/15', 'bg-white/35', 'bg-white/60', 'bg-white']
+
+/** A year of training as shades, newest week last. */
+function StreakCalendar() {
+  const { sessions, profile } = useStore()
+  const navigate = useNavigate()
+  const ref = useRef<HTMLDivElement>(null)
+  const today = ymd(Date.now())
+  const values = dayValues(sessions, profile.heatmap)
+  const t = scale(values.values())
+  const cols = yearColumns(today, 26) // half a year: a full one does not read at this size
+
+  useLayoutEffect(() => {
+    if (ref.current) ref.current.scrollLeft = ref.current.scrollWidth
+  }, [])
+
+  return (
+    <Tap onClick={() => navigate('/calendar')} className="card w-full p-5 text-left">
+      <div className="mb-3 flex items-baseline justify-between">
+        <h3 className="flex items-center gap-2 font-display text-lg font-semibold">
+          <Flame size={16} className="text-accent" /> {stats(sessions).streak} day streak
+        </h3>
+        <span className="text-xs text-zinc-500">6 months</span>
+      </div>
+      <div ref={ref} className="overflow-x-auto">
+        <div className="flex gap-[3px]">
+          {cols.map((week, i) => (
+            <div key={i} className="flex flex-col gap-[3px]">
+              {week.map((d) => (
+                <span key={d} className={`size-[9px] shrink-0 rounded-[2px] ${d > today ? 'bg-transparent' : SHADE[levelOf(values.get(d) ?? 0, t, profile.heatmap)]}`} />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </Tap>
+  )
+}
+
 function RecentPRs() {
   const { sessions, profile } = useStore()
   const navigate = useNavigate()
@@ -210,10 +253,10 @@ function AverageDuration() {
   const { sessions } = useStore()
   const avg = sessions.length ? Math.round(sessions.reduce((t, s) => t + s.durationSec, 0) / sessions.length) : 0
   return (
-    <div className="card h-full p-4">
-      <Timer size={18} className="text-accent" />
-      <p className="mt-3 font-display text-2xl font-bold tabular-nums">{fmtDuration(avg)}</p>
-      <p className="text-xs text-zinc-500">Average</p>
+    <div className="card h-full p-3.5">
+      <Timer size={16} className="text-accent" />
+      <p className="mt-2 truncate font-display text-xl font-bold tabular-nums">{fmtDuration(avg)}</p>
+      <p className="truncate text-[10px] text-zinc-500">Average</p>
     </div>
   )
 }
@@ -227,16 +270,17 @@ function Planned() {
 }
 
 export const WIDGETS: Widget[] = [
-  { id: 'next', name: 'Next workout', wide: true, Render: NextWorkout },
-  { id: 'planned', name: 'Planned', wide: true, Render: Planned },
-  { id: 'calendar', name: 'Training calendar', wide: true, Render: TrainingCalendar },
-  { id: 'week', name: 'This week', wide: true, Render: WeekStrip },
-  { id: 'prs', name: 'Recent PRs', wide: true, Render: RecentPRs },
-  { id: 'recent', name: 'Recent workouts', wide: true, Render: Recent },
-  { id: 'streak', name: 'Workout streak', wide: false, Render: Streak },
-  { id: 'volume', name: 'Weekly volume', wide: false, Render: WeeklyVolume },
-  { id: 'sessions', name: 'Total sessions', wide: false, Render: TotalSessions },
-  { id: 'duration', name: 'Average duration', wide: false, Render: AverageDuration },
+  { id: 'next', name: 'Next workout', size: 'full', Render: NextWorkout },
+  { id: 'planned', name: 'Planned', size: 'full', Render: Planned },
+  { id: 'calendar', name: 'Training calendar', size: 'full', Render: TrainingCalendar },
+  { id: 'heat', name: 'Streak calendar', size: 'full', Render: StreakCalendar },
+  { id: 'week', name: 'This week', size: 'full', Render: WeekStrip },
+  { id: 'prs', name: 'Recent PRs', size: 'full', Render: RecentPRs },
+  { id: 'recent', name: 'Recent workouts', size: 'full', Render: Recent },
+  { id: 'streak', name: 'Workout streak', size: 'third', Render: Streak },
+  { id: 'volume', name: 'Weekly volume', size: 'third', Render: WeeklyVolume },
+  { id: 'sessions', name: 'Total sessions', size: 'third', Render: TotalSessions },
+  { id: 'duration', name: 'Average duration', size: 'third', Render: AverageDuration },
 ]
 
 export const widgetById = (id: string) => WIDGETS.find((w) => w.id === id)

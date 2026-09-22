@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowDown, ArrowUp, Check, Pencil, Plus, X } from 'lucide-react'
 import { setSettings, useStore } from '../store'
-import { widgetById, WIDGETS } from '../widgets'
+import { SPAN, widgetById, WIDGETS } from '../widgets'
 import { SyncBadge } from '../sync'
 import { Block, btn, item, Page, Sheet, spring, Tap } from '../ui'
 
@@ -93,9 +93,9 @@ export default function Today() {
           </Tap>
         </Block>
       ) : (
-        <motion.div variants={item} className="grid grid-cols-2 gap-3">
+        <motion.div variants={item} className="grid grid-cols-6 gap-3">
           {shown.map((w) => (
-            <div key={w.id} className={w.wide ? 'col-span-2' : ''}>
+            <div key={w.id} className={SPAN[w.size]}>
               <w.Render />
             </div>
           ))}
