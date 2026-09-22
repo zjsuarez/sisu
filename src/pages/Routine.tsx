@@ -4,7 +4,8 @@ import { ArrowDown, ArrowUp, ChevronLeft, Copy, Plus, Trash2, X } from 'lucide-r
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { deleteRoutine, MUSCLES, newId, resolve, saveRoutine, useStore, type RepTarget, type Routine, type RoutineExercise } from '../store'
 import { ExercisePicker } from '../exercisePicker'
-import { btn, spring, Tap } from '../ui'
+import { routineTime } from '../progress'
+import { btn, fmtDuration, spring, Tap } from '../ui'
 import { ask } from '../dialog'
 
 const field = 'w-full rounded-2xl border border-line bg-surface-2 px-4 py-3.5 outline-none placeholder:text-zinc-600 focus:border-accent'
@@ -21,9 +22,10 @@ export default function RoutineEditor() {
   const { id } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { routines, plans, profile } = useStore()
+  const { routines, plans, profile, sessions } = useStore()
 
   const existing = routines.find((r) => r.id === id)
+  const time = existing ? routineTime(sessions, existing.id) : null
   const [draft, setDraft] = useState<Routine>(
     existing ?? { id: newId(), name: '', planId: params.get('plan') ?? profile.activePlanId, muscles: [], exercises: [] },
   )
@@ -67,7 +69,14 @@ export default function RoutineEditor() {
         <Tap onClick={() => navigate(-1)} aria-label="Back" className="grid size-10 shrink-0 place-items-center rounded-full bg-surface-2 text-zinc-400">
           <ChevronLeft size={20} />
         </Tap>
-        <h1 className="font-display text-2xl font-bold">{existing ? 'Edit routine' : 'New routine'}</h1>
+        <div className="min-w-0">
+          <h1 className="truncate font-display text-2xl font-bold">{existing ? 'Edit routine' : 'New routine'}</h1>
+          {time && (
+            <p className="text-xs text-muted">
+              {fmtDuration(time.seconds)} on average · {time.workouts} workout{time.workouts > 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
       </header>
 
       <div className="space-y-4">

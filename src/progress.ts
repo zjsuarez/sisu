@@ -66,6 +66,16 @@ export function recentRecords(sessions: { at: number; exercises: { exerciseId: s
   return out.reverse().slice(0, limit)
 }
 
+/**
+ * How long this routine usually takes, in seconds, and over how many workouts. Workouts that were
+ * started and finished in the same minute are left out: they are mistakes, not fast sessions.
+ */
+export function routineTime(sessions: { routineId: string | null; durationSec: number }[], routineId: string) {
+  const real = sessions.filter((s) => s.routineId === routineId && s.durationSec > 0)
+  if (!real.length) return null
+  return { seconds: Math.round(real.reduce((t, s) => t + s.durationSec, 0) / real.length), workouts: real.length }
+}
+
 /** One point per session, oldest first — what a chart needs. Sessions with nothing to measure drop out. */
 export function points(history: { at: number; sets: Logged[] }[]) {
   return history

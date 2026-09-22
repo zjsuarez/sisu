@@ -1,5 +1,5 @@
 /** Estimated 1RM and the shape of an exercise's progress. No Firebase, no DOM. */
-import { bestSet, e1rm, inReserve, newRecords, points, recentRecords, streakOf, summary } from '../src/progress.ts'
+import { bestSet, e1rm, inReserve, newRecords, points, recentRecords, routineTime, streakOf, summary } from '../src/progress.ts'
 
 let failed = 0
 const check = (what: string, ok: boolean, got?: unknown) => {
@@ -73,6 +73,20 @@ check('and the newest comes first', recents[0].at === 4 && recents[0].name === '
 check('a session that beat nothing is left out', !recents.some((r) => r.at === 2))
 check('the limit is respected', recentRecords(hist, 1).length === 1)
 check('no workouts, no records', recentRecords([], 3).length === 0)
+
+/* how long a routine takes */
+const logs = [
+  { routineId: 'push', durationSec: 3600 },
+  { routineId: 'push', durationSec: 4200 },
+  { routineId: 'push', durationSec: 0 }, // started and finished in the same minute
+  { routineId: 'pull', durationSec: 1800 },
+  { routineId: null, durationSec: 9000 },
+]
+check('a routine averages its own workouts', routineTime(logs, 'push')?.seconds === 3900, routineTime(logs, 'push'))
+check('and says how many it averaged', routineTime(logs, 'push')?.workouts === 2, routineTime(logs, 'push'))
+check('a zero-length workout is not a fast one', routineTime(logs, 'push')?.workouts !== 3)
+check('a routine never trained has no average', routineTime(logs, 'legs') === null)
+check('workouts with no routine belong to none of them', routineTime(logs, 'pull')?.seconds === 1800)
 
 /* streaks: a rest day is fine, four days off is not */
 const day = 86_400_000

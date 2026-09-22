@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Check, Play, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { deletePlan, savePlan, setActivePlan, useStore, WEEKDAYS, type Plan, type Routine, type Session, type WeeklySchedule } from './store'
+import { routineTime } from './progress'
 import { btn, fmtShortDay, Tap } from './ui'
 import { ask } from './dialog'
 
@@ -28,14 +29,19 @@ export function planSummary(st: ReturnType<typeof planStats>) {
 
 export function RoutineRow({ routine, onStart }: { routine: Routine; onStart: (r: Routine) => void }) {
   const navigate = useNavigate()
+  const { sessions } = useStore()
   const sets = routine.exercises.reduce((n, e) => n + e.sets.length, 0)
   const ready = routine.exercises.length > 0
+  const time = routineTime(sessions, routine.id)
 
   return (
     <div className="flex items-stretch gap-2">
       <motion.button whileTap={{ scale: 0.99 }} onClick={() => navigate(`/routine/${routine.id}`)} className="min-w-0 flex-1 rounded-2xl bg-surface-2 px-4 py-3 text-left">
         <p className="truncate font-semibold">{routine.name}</p>
-        <p className="truncate text-xs text-muted">{ready ? `${routine.exercises.length} exercises · ${sets} sets` : 'No exercises'}</p>
+        <p className="truncate text-xs text-muted">
+          {ready ? `${routine.exercises.length} exercises · ${sets} sets` : 'No exercises'}
+          {time && ` · ${Math.round(time.seconds / 60)} min`}
+        </p>
       </motion.button>
       <Tap
         onClick={() => onStart(routine)}
