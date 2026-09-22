@@ -2,7 +2,6 @@ import { motion } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Trophy } from 'lucide-react'
 import { fromKg, stats, useStore } from '../store'
-import { setText } from '../sets'
 import { deviceLabel } from '../sync'
 import { Block, Counter, fmtCompact, fmtDuration, fmtTime, Page, spring } from '../ui'
 
@@ -80,28 +79,19 @@ export default function Progress() {
         <h2 className="mb-3 font-display text-xl font-semibold">History</h2>
         <div className="space-y-2">
           {sessions.map((s) => (
-            <details key={s.id} className="card group p-4">
-              <summary className="flex cursor-pointer list-none items-center justify-between">
-                <div>
-                  <p className="font-semibold">{s.title}</p>
-                  <p className="text-xs text-zinc-500">
-                    {new Date(s.at).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} · {fmtDuration(s.durationSec)}
-                  </p>
-                  <p className="text-xs text-zinc-600">
-                    {s.start} on {deviceLabel(s.deviceId, devices)} · {s.syncedAt ? `in the cloud ${fmtTime(s.syncedAt)}` : 'waiting to upload'}
-                  </p>
-                </div>
-                <span className="text-zinc-500 transition-transform group-open:rotate-90">›</span>
-              </summary>
-              <ul className="mt-3 space-y-1 border-t border-line pt-3 text-sm">
-                {s.exercises.map((e) => (
-                  <li key={e.name} className="flex justify-between gap-4">
-                    <span className="text-zinc-300">{e.name}</span>
-                    <span className="text-right text-zinc-500 tabular-nums">{e.sets.map((x) => setText(fromKg(x.weight, profile.unit), x)).join('  ')}</span>
-                  </li>
-                ))}
-              </ul>
-            </details>
+            <button key={s.id} onClick={() => navigate(`/summary/${s.id}`)} className="card flex w-full items-center gap-3 p-4 text-left">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold">{s.title}</p>
+                <p className="text-xs text-zinc-500">
+                  {new Date(s.at).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })} · {fmtDuration(s.durationSec)} ·{' '}
+                  {s.exercises.reduce((n, e) => n + e.sets.length, 0)} sets
+                </p>
+                <p className="truncate text-xs text-zinc-600">
+                  {s.start} on {deviceLabel(s.deviceId, devices)} · {s.syncedAt ? `in the cloud ${fmtTime(s.syncedAt)}` : 'waiting to upload'}
+                </p>
+              </div>
+              <ChevronRight size={16} className="shrink-0 text-zinc-600" />
+            </button>
           ))}
         </div>
       </Block>

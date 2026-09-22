@@ -87,7 +87,7 @@ export default function Session() {
       end = /^\d{1,2}:\d{2}$/.test(answer) ? answer.padStart(5, '0') : undefined
     }
     const saved = finishSession(end)
-    navigate(saved ? `/summary/${saved}` : '/', { replace: true })
+    navigate(saved ? `/summary/${saved}` : '/', { replace: true, state: { fresh: true } })
   }
 
   const discard = async () => {

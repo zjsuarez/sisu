@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ChevronDown, Flame, SlidersHorizontal, Trash2, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Flame, SlidersHorizontal, Trash2, X } from 'lucide-react'
 import { dayValues, levelOf, monthGrid, monthsAround, scale, yearColumns, ymd } from '../calendar'
 import { deleteSession, fromKg, setSettings, stats, useStore, volume, type Heatmap, type Session, type Slot } from '../store'
 import { blankSlot, SlotEditor, slotTime, toDraft, type Draft } from '../slots'
 import { Block, fmtDuration, Page, Sheet, Tap } from '../ui'
 import { scroller } from '../App'
+import { useNavigate } from 'react-router-dom'
 import { ask } from '../dialog'
 
 const METRICS: { id: Heatmap; label: string }[] = [
@@ -26,6 +27,7 @@ const group = <T extends { date: string }>(xs: T[]) => {
 
 export default function Calendar() {
   const { sessions, slots, routines, profile } = useStore()
+  const navigate = useNavigate()
   const today = ymd(Date.now())
   const [expanded, setExpanded] = useState(false)
   const [picking, setPicking] = useState(false)
@@ -137,7 +139,7 @@ export default function Calendar() {
         {day && (
           <div className="space-y-3 pb-2">
             {done.get(day)?.map((s) => (
-              <Logged key={s.id} session={s} unit={profile.unit} onDeleted={close} />
+              <Logged key={s.id} session={s} unit={profile.unit} onDeleted={close} onOpen={() => navigate(`/summary/${s.id}`)} />
             ))}
             {draft && <SlotEditor draft={draft} setDraft={(d) => (d ? setDraft(d) : close())} showDate={false} />}
           </div>
@@ -147,15 +149,18 @@ export default function Calendar() {
   )
 }
 
-function Logged({ session, unit, onDeleted }: { session: Session; unit: 'kg' | 'lb'; onDeleted: () => void }) {
+function Logged({ session, unit, onDeleted, onOpen }: { session: Session; unit: 'kg' | 'lb'; onDeleted: () => void; onOpen: () => void }) {
   return (
     <div className="flex items-center gap-3 rounded-2xl bg-surface-2 px-4 py-3">
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold">{session.title}</p>
-        <p className="text-xs text-muted">
-          {fmtDuration(session.durationSec)} · {Math.round(fromKg(volume(session.exercises), unit))} {unit}
-        </p>
-      </div>
+      <Tap onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold">{session.title}</p>
+          <p className="text-xs text-muted">
+            {fmtDuration(session.durationSec)} · {Math.round(fromKg(volume(session.exercises), unit))} {unit}
+          </p>
+        </div>
+        <ChevronRight size={16} className="shrink-0 text-zinc-500" />
+      </Tap>
       <Tap
         onClick={async () => {
           if (!(await ask({ title: `Delete ${session.title}?`, body: 'The day goes back to planned.', confirm: 'Delete', danger: true }))) return
