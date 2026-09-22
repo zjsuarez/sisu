@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { motion } from 'motion/react'
 import { Check, ChevronLeft, Trash2, Trophy } from 'lucide-react'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -5,7 +6,7 @@ import { deleteSession, fromKg, useStore, volume } from '../store'
 import { newRecords } from '../progress'
 import { setText } from '../sets'
 import { ask } from '../dialog'
-import { btn, Counter, fmtCompact, fmtDay, fmtDuration, list, item, Tap } from '../ui'
+import { btn, Counter, fmtCompact, fmtDay, fmtDuration, list, item, spring, Tap } from '../ui'
 
 /** What a workout came to: shown the moment you finish one, and for any workout since. */
 export default function Summary() {
@@ -13,6 +14,7 @@ export default function Summary() {
   const { sessions, profile } = useStore()
   const navigate = useNavigate()
   const fresh = (useLocation().state as { fresh?: boolean } | null)?.fresh === true
+  const [tab, setTab] = useState<'summary' | 'exercises'>('summary')
 
   const s = sessions.find((x) => x.id === id)
   if (!s) return <Navigate to="/" replace /> // deleted, or a link to a workout this device never had
@@ -69,41 +71,70 @@ export default function Summary() {
           </p>
         </motion.div>
 
-        <motion.div variants={item} className="grid grid-cols-2 gap-3">
-          {cards.map((c) => (
-            <div key={c.label} className="card p-5">
-              <p className="font-display text-3xl font-bold tabular-nums">
-                <Counter value={c.value} format={c.compact && c.value >= 10_000 ? fmtCompact : undefined} />
-              </p>
-              <p className="mt-0.5 text-xs text-zinc-500">{c.label}</p>
-            </div>
+        <motion.div variants={item} className="flex rounded-2xl bg-surface p-1">
+          {(['summary', 'exercises'] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)} className="relative flex-1 py-2.5 font-display text-sm font-semibold capitalize">
+              {tab === t && <motion.span layoutId="summary-tab" transition={spring} className="absolute inset-0 rounded-xl bg-surface-2" />}
+              <span className={`relative ${tab === t ? 'text-white' : 'text-zinc-500'}`}>{t}</span>
+            </button>
           ))}
         </motion.div>
 
-        {records.length > 0 && (
-          <motion.div variants={item} className="card p-5">
-            <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-semibold">
-              <Trophy size={17} className="text-accent" /> New records
-            </h2>
-            <div className="space-y-2">
-              {records.map((r) => (
-                <div key={r.exerciseId} className="flex items-center justify-between gap-4">
-                  <span className="min-w-0 truncate text-sm">{r.name}</span>
-                  <span className="shrink-0 font-display font-semibold tabular-nums">{setText(kg(r.set.weight), r.set)}</span>
+        {tab === 'summary' ? (
+          <>
+            <motion.div variants={item} className="grid grid-cols-2 gap-3">
+              {cards.map((c) => (
+                <div key={c.label} className="card p-5">
+                  <p className="font-display text-3xl font-bold tabular-nums">
+                    <Counter value={c.value} format={c.compact && c.value >= 10_000 ? fmtCompact : undefined} />
+                  </p>
+                  <p className="mt-0.5 text-xs text-zinc-500">{c.label}</p>
                 </div>
               ))}
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
 
-        <motion.div variants={item} className="card divide-y divide-line">
-          {s.exercises.map((e) => (
-            <div key={e.exerciseId} className="flex items-baseline justify-between gap-4 px-5 py-3.5">
-              <span className="min-w-0 flex-1 truncate text-sm">{e.name}</span>
-              <span className="shrink-0 text-right text-xs text-zinc-500 tabular-nums">{e.sets.map((x) => setText(kg(x.weight), x)).join('  ')}</span>
-            </div>
-          ))}
-        </motion.div>
+            {records.length > 0 && (
+              <motion.div variants={item} className="card p-5">
+                <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-semibold">
+                  <Trophy size={17} className="text-accent" /> New records
+                </h2>
+                <div className="space-y-2">
+                  {records.map((r) => (
+                    <div key={r.exerciseId} className="flex items-center justify-between gap-4">
+                      <span className="min-w-0 truncate text-sm">{r.name}</span>
+                      <span className="shrink-0 font-display font-semibold tabular-nums">{setText(kg(r.set.weight), r.set)}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </>
+        ) : (
+          s.exercises.map((e) => (
+            <motion.div key={e.exerciseId} variants={item} className="card p-4">
+              <h2 className="truncate font-display text-lg font-semibold">{e.name}</h2>
+              <p className="text-xs text-zinc-500">
+                {e.sets.length} set{e.sets.length > 1 ? 's' : ''} · {Math.round(kg(volume([e])))} {profile.unit}
+              </p>
+              <div className="mt-3 space-y-1">
+                {e.sets.map((x, i) => (
+                  <div key={i} className="grid grid-cols-[1.5rem_1fr_1fr_3.25rem] items-center gap-2 rounded-xl bg-surface-2 px-2 py-2.5">
+                    <span className="text-center font-display text-sm font-semibold text-zinc-500">{i + 1}</span>
+                    <span className="text-center font-display font-semibold tabular-nums">
+                      {kg(x.weight)} <span className="text-xs font-normal text-zinc-500">{profile.unit}</span>
+                    </span>
+                    <span className="text-center font-display font-semibold tabular-nums">
+                      {x.reps} <span className="text-xs font-normal text-zinc-500">reps</span>
+                    </span>
+                    <span className="text-center text-xs text-zinc-500 tabular-nums">
+                      {x.rir !== undefined ? `${x.rir} RIR` : x.rpe !== undefined ? `@${x.rpe}` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          ))
+        )}
       </motion.div>
 
       <div className="safe-bottom fixed inset-x-0 bottom-0 mx-auto max-w-md bg-gradient-to-t from-ink via-ink to-transparent px-5 pt-10 pb-3">

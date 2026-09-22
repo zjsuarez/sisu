@@ -3,11 +3,16 @@
  * this is what the app shows under Profile, and how you tell whether a phone is running the
  * latest build.
  */
-export const VERSION = '1.7.0'
+export const VERSION = '1.8.0'
 
 export type Release = { version: string; date: string; changes: string[] }
 
 export const RELEASES: Release[] = [
+  {
+    version: '1.8.0',
+    date: '2026-09-23',
+    changes: ['A workout’s summary splits in two: the numbers, and every exercise with its sets laid out one per line'],
+  },
   {
     version: '1.7.0',
     date: '2026-09-23',
